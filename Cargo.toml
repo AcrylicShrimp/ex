@@ -1,0 +1,20 @@
+[package]
+name = "ex"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ex-ast = { path="ex-ast" }
+ex-parser = { path="ex-parser" }
+ex-span = { path="ex-span" }
+ex-symbol = { path="ex-symbol" }
+
+[workspace]
+members = [
+  "ex-ast",
+  "ex-parser",
+  "ex-span",
+  "ex-symbol"
+]
