@@ -1,4 +1,4 @@
-use std::ops::{Add, Sub};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pos(u32);
@@ -51,6 +51,24 @@ impl Add<Pos> for u32 {
     }
 }
 
+impl AddAssign for Pos {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self::new(self.0 + other.0);
+    }
+}
+
+impl AddAssign<u32> for Pos {
+    fn add_assign(&mut self, other: u32) {
+        *self = Self::new(self.0 + other);
+    }
+}
+
+impl AddAssign<Pos> for u32 {
+    fn add_assign(&mut self, other: Pos) {
+        *self += other.0;
+    }
+}
+
 impl Sub<Self> for Pos {
     type Output = Self;
 
@@ -72,5 +90,23 @@ impl Sub<Pos> for u32 {
 
     fn sub(self, other: Pos) -> Pos {
         Pos::new(self - other.0)
+    }
+}
+
+impl SubAssign for Pos {
+    fn sub_assign(&mut self, other: Self) {
+        *self = Self::new(self.0 - other.0);
+    }
+}
+
+impl SubAssign<u32> for Pos {
+    fn sub_assign(&mut self, other: u32) {
+        *self = Self::new(self.0 - other);
+    }
+}
+
+impl SubAssign<Pos> for u32 {
+    fn sub_assign(&mut self, other: Pos) {
+        *self -= other.0;
     }
 }

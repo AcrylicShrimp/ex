@@ -24,19 +24,19 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "ex"
 version = "0.1.0"
 dependencies = [
- "ex-ast",
  "ex-parser",
  "ex-span",
  "ex-symbol",
 ]
 
 [[package]]
-name = "ex-ast"
-version = "0.1.0"
-
-[[package]]
 name = "ex-parser"
 version = "0.1.0"
+dependencies = [
+ "ex-span",
+ "ex-symbol",
+ "unicode-xid",
+]
 
 [[package]]
 name = "ex-span"
@@ -172,6 +172,12 @@ name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
+
+[[package]]
+name = "unicode-xid"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f962df74c8c05a667b5ee8bcf162993134c104e96440b663c8daa176dc772d8c"
 
 [[package]]
 name = "wasi"
