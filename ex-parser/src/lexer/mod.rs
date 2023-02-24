@@ -80,7 +80,7 @@ fn convert(token: LowToken, low: Pos, file: &SourceFile) -> Option<Token> {
         LowTokenKind::Comma => TokenKind::Comma,
         LowTokenKind::Colon => TokenKind::Colon,
         LowTokenKind::Semicolon => TokenKind::Semicolon,
-        LowTokenKind::Eq => TokenKind::Eq,
+        LowTokenKind::Eq => TokenKind::Assign,
         LowTokenKind::Bang => TokenKind::LogNot,
         LowTokenKind::Lt => TokenKind::Lt,
         LowTokenKind::Gt => TokenKind::Gt,
