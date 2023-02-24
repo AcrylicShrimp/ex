@@ -8,6 +8,7 @@ pub use symbol::*;
 
 use lazy_static::lazy_static;
 use parking_lot::Mutex;
+use std::fmt::{Debug, Display};
 
 lazy_static! {
     pub(crate) static ref STR_INTERNER: Mutex<Interner> = Mutex::new(Interner::new());
@@ -20,6 +21,18 @@ impl Symbol {
 
     pub fn to_str(self) -> &'static str {
         STR_INTERNER.lock().str(self)
+    }
+}
+
+impl Display for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.to_str())
+    }
+}
+
+impl Debug for Symbol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.to_str())
     }
 }
 

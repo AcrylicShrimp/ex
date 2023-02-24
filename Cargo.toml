@@ -6,12 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ex-parser = { path="ex-parser" }
-ex-span = { path="ex-span" }
-ex-symbol = { path="ex-symbol" }
+clap = { version = "4" }
+colored = { version = "2" }
+ex-diagnostics = { path = "ex-diagnostics" }
+ex-parser = { path = "ex-parser" }
+ex-span = { path = "ex-span" }
+ex-symbol = { path = "ex-symbol" }
+regex = { version = "1" }
 
 [workspace]
 members = [
+  "ex-diagnostics",
   "ex-parser",
   "ex-span",
   "ex-symbol"

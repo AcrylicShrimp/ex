@@ -1,7 +1,7 @@
 use crate::TokenKind;
 use ex_span::Span;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct Token {
     pub kind: TokenKind,
     pub span: Span,
@@ -95,7 +95,7 @@ impl Token {
                 TokenKind::Assign => TokenKind::Ne,
                 _ => return None,
             },
-            TokenKind::Unknown
+            TokenKind::Unknown { .. }
             | TokenKind::Comment
             | TokenKind::OpenParen
             | TokenKind::CloseParen

@@ -1,8 +1,10 @@
+mod symbols;
 mod token;
 mod token_kind;
 mod token_literal;
 mod token_literal_kind;
 
+pub use symbols::*;
 pub use token::*;
 pub use token_kind::*;
 pub use token_literal::*;
@@ -69,7 +71,9 @@ fn convert(token: LowToken, low: Pos, file: &SourceFile) -> Option<Token> {
     let span = Span::new(low, low + token.len);
     let kind = match token.kind {
         LowTokenKind::Whitespace | LowTokenKind::Comment => return None,
-        LowTokenKind::Unknown => TokenKind::Unknown,
+        LowTokenKind::Unknown => TokenKind::Unknown {
+            symbol: Symbol::from_str(file.slice(span)),
+        },
         LowTokenKind::OpenParen => TokenKind::OpenParen,
         LowTokenKind::CloseParen => TokenKind::CloseParen,
         LowTokenKind::OpenBrace => TokenKind::OpenBrace,

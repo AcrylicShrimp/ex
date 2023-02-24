@@ -1,4 +1,4 @@
-use crate::{Pos, Span};
+use crate::{LineCol, Pos, Span};
 use std::{fmt::Display, path::PathBuf};
 
 #[derive(Debug)]
@@ -15,7 +15,7 @@ impl SourceFile {
         span: Span,
         content: impl Into<String>,
         name: impl Into<String>,
-        path: Option<PathBuf>,
+        path: Option<impl Into<PathBuf>>,
     ) -> Self {
         let content = content.into();
         let mut line_positions = vec![span.low];
@@ -30,12 +30,20 @@ impl SourceFile {
             content,
             line_positions,
             name: name.into(),
-            path,
+            path: path.map(|path| path.into()),
         }
     }
 
     pub fn span(&self) -> Span {
         self.span
+    }
+
+    pub fn span_begin(&self) -> Span {
+        Span::new(self.span.low, self.span.low)
+    }
+
+    pub fn span_end(&self) -> Span {
+        Span::new(self.span.high, self.span.high)
     }
 
     pub fn content(&self) -> &String {
@@ -74,6 +82,17 @@ impl SourceFile {
             Ok(line) => line as u32,
             Err(line) => line as u32 - 1,
         }
+    }
+
+    pub fn find_line_col(&self, pos: Pos) -> LineCol {
+        let line = self.find_line(pos);
+        let line_span = self.line_span(line);
+        LineCol::new(
+            line,
+            self.slice(line_span)[..(pos - line_span.low).get() as usize]
+                .chars()
+                .count() as _,
+        )
     }
 
     pub fn slice(&self, span: Span) -> &str {

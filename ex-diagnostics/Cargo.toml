@@ -1,13 +1,10 @@
 [package]
-name = "ex-parser"
+name = "ex-diagnostics"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ex-diagnostics = { path = "../ex-diagnostics" }
 ex-span = { path = "../ex-span" }
 ex-symbol = { path = "../ex-symbol" }
-lazy_static = { version = "1" }
-unicode-xid = { version = "0.2" }

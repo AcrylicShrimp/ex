@@ -21,7 +21,7 @@ impl SourceMap {
         &mut self,
         content: impl Into<String>,
         name: impl Into<String>,
-        path: Option<PathBuf>,
+        path: Option<impl Into<PathBuf>>,
     ) -> Arc<SourceFile> {
         let content = content.into();
         debug_assert!(content.len() < u32::MAX as usize);
