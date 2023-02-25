@@ -1,6 +1,14 @@
 
 # This is a comment.
 
+fn random(): int {
+
+}
+
+fn print(abc: int) {
+  
+}
+
 fn main() {
   let a = 10;
   let b = 20;

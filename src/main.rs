@@ -1,6 +1,7 @@
 use colored::{ColoredString, Colorize};
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::parse_ast;
+use ex_resolve_ref::resolve_ast;
 use ex_span::SourceMap;
 use regex::Regex;
 use std::sync::{mpsc::channel, Arc};
@@ -11,17 +12,23 @@ fn main() {
     let file = source.add_source_file(content, "test.ex", Some("../test/test.ex"));
 
     let (sender, receiver) = channel();
-    let ast = parse_ast(file.clone(), Arc::new(sender));
+
+    {
+        let diagnostics = Arc::new(sender);
+        let ast = parse_ast(file.clone(), diagnostics.clone());
+
+        let ast_string = format!("{:#?}", ast);
+        let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
+        let clean_ast_string = regex.replace_all(&ast_string, "");
+
+        let (function_table, symbol_reference_table) = resolve_ast(&ast, &file, &diagnostics);
+    }
 
     while let Ok(diagnostics) = receiver.recv() {
         write_diagnostics(&diagnostics);
     }
 
-    let ast_string = format!("{:#?}", ast);
-    let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
-    let clean_ast_string = regex.replace_all(&ast_string, "");
-
-    println!("{}", clean_ast_string);
+    // println!("{}", clean_ast_string);
 }
 
 fn write_diagnostics(diagnostics: &Diagnostics) {

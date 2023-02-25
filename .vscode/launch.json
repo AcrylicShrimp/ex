@@ -1,0 +1,106 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'ex-diagnostics'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=ex-diagnostics"],
+        "filter": {
+          "name": "ex-diagnostics",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'ex-span'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=ex-span"],
+        "filter": {
+          "name": "ex-span",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'ex-symbol'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=ex-symbol"],
+        "filter": {
+          "name": "ex-symbol",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'ex-parser'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=ex-parser"],
+        "filter": {
+          "name": "ex-parser",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in library 'ex-resolve-ref'",
+      "cargo": {
+        "args": ["test", "--no-run", "--lib", "--package=ex-resolve-ref"],
+        "filter": {
+          "name": "ex-resolve-ref",
+          "kind": "lib"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug executable 'ex'",
+      "cargo": {
+        "args": ["build", "--bin=ex", "--package=ex"],
+        "filter": {
+          "name": "ex",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug unit tests in executable 'ex'",
+      "cargo": {
+        "args": ["test", "--no-run", "--bin=ex", "--package=ex"],
+        "filter": {
+          "name": "ex",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

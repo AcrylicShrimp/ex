@@ -108,6 +108,7 @@ dependencies = [
  "colored",
  "ex-diagnostics",
  "ex-parser",
+ "ex-resolve-ref",
  "ex-span",
  "ex-symbol",
  "regex",
@@ -130,6 +131,16 @@ dependencies = [
  "ex-symbol",
  "lazy_static",
  "unicode-xid",
+]
+
+[[package]]
+name = "ex-resolve-ref"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-span",
+ "ex-symbol",
 ]
 
 [[package]]

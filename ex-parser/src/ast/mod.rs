@@ -1,6 +1,19 @@
+mod node_id;
+mod node_id_allocator;
+
+pub use node_id::*;
+pub use node_id_allocator::*;
+
 use crate::TokenLiteral;
 use ex_span::Span;
 use ex_symbol::Symbol;
+
+#[derive(Debug, Clone, Hash)]
+pub struct Typename {
+    pub id: NodeId,
+    pub typename: Id,
+    pub span: Span,
+}
 
 #[derive(Debug, Clone, Copy, Hash)]
 pub struct Id {
@@ -22,6 +35,7 @@ pub struct ASTProgram {
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTTopLevel {
+    pub id: NodeId,
     pub kind: ASTTopLevelKind,
     pub span: Span,
 }
@@ -53,7 +67,7 @@ pub struct ASTFunctionSignature {
 pub struct ASTFunctionParameter {
     pub name: Id,
     pub colon: Id,
-    pub typename: Id,
+    pub typename: Typename,
     pub comma: Option<Id>,
     pub span: Span,
 }
@@ -61,12 +75,13 @@ pub struct ASTFunctionParameter {
 #[derive(Debug, Clone, Hash)]
 pub struct ASTFunctionReturnType {
     pub colon: Id,
-    pub typename: Id,
+    pub typename: Typename,
     pub span: Span,
 }
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTStatement {
+    pub id: NodeId,
     pub kind: ASTStatementKind,
     pub span: Span,
 }
@@ -94,7 +109,7 @@ pub struct ASTLet {
 #[derive(Debug, Clone, Hash)]
 pub struct ASTLetType {
     pub colon: Id,
-    pub typename: Id,
+    pub typename: Typename,
     pub span: Span,
 }
 
@@ -182,6 +197,7 @@ pub struct ASTRow {
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTExpression {
+    pub id: NodeId,
     pub kind: ASTExpressionKind,
     pub span: Span,
 }
@@ -192,9 +208,9 @@ pub enum ASTExpressionKind {
     Unary(ASTUnaryExpression),
     As(ASTAsExpression),
     Call(ASTCallExpression),
-    Paren(ASTParenExpression), // single
-    Literal(Literal),          // single
-    Id(Id),                    // single
+    Paren(ASTParenExpression),   // single
+    Literal(Literal),            // single
+    IdReference(ASTIdReference), // single
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -247,7 +263,7 @@ pub enum ASTUnaryOperatorKind {
 pub struct ASTAsExpression {
     pub expression: Box<ASTExpression>,
     pub keyword_as: Id,
-    pub typename: Id,
+    pub typename: Typename,
     pub span: Span,
 }
 
@@ -272,5 +288,12 @@ pub struct ASTParenExpression {
     pub paren_open: Id,
     pub expression: Box<ASTExpression>,
     pub paren_close: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTIdReference {
+    pub id: NodeId,
+    pub reference: Id,
     pub span: Span,
 }
