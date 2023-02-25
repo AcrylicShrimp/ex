@@ -21,7 +21,8 @@ fn main() {
         let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
         let clean_ast_string = regex.replace_all(&ast_string, "");
 
-        let (function_table, symbol_reference_table) = resolve_ast(&ast, &file, &diagnostics);
+        let (function_table, symbol_reference_table, type_reference_table) =
+            resolve_ast(&ast, &file, &diagnostics);
     }
 
     while let Ok(diagnostics) = receiver.recv() {

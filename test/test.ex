@@ -5,8 +5,9 @@ fn random(): int {
 
 }
 
-fn print(abc: int) {
-  
+fn print(abc: integer) {
+  let a: MyType = 10;
+  let b = a as MyTypeTwo;
 }
 
 fn main() {

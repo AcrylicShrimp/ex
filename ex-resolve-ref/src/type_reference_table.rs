@@ -15,32 +15,37 @@ impl TypeReferenceTable {
 #[derive(Debug, Clone, Hash)]
 pub struct TypeReference {
     pub id: Id,
-    pub kind: TypeReferenceKind,
+    pub kind: TypeKind,
 }
 
 impl TypeReference {
-    pub fn new(id: Id, kind: TypeReferenceKind) -> Self {
+    pub fn new(id: Id, kind: TypeKind) -> Self {
         Self { id, kind }
     }
 }
 
 #[derive(Debug, Clone, Hash)]
-pub enum TypeReferenceKind {
-    Function { node_id: NodeId },
-    Parameter { node_id: NodeId, index: usize },
-    Variable { node_id: NodeId, scope: NodeId },
+pub enum TypeKind {
+    Unknown,
+    Integer,
+    Float,
+    String,
 }
 
-impl TypeReferenceKind {
-    pub fn function(node_id: NodeId) -> Self {
-        Self::Function { node_id }
+impl TypeKind {
+    pub fn unknown() -> Self {
+        Self::Unknown
     }
 
-    pub fn parameter(node_id: NodeId, index: usize) -> Self {
-        Self::Parameter { node_id, index }
+    pub fn integer() -> Self {
+        Self::Integer
     }
 
-    pub fn variable(node_id: NodeId, scope: NodeId) -> Self {
-        Self::Variable { node_id, scope }
+    pub fn float() -> Self {
+        Self::Float
+    }
+
+    pub fn string() -> Self {
+        Self::String
     }
 }

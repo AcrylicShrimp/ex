@@ -59,4 +59,7 @@ lazy_static! {
     pub static ref KEYWORD_ELSE: Symbol = Symbol::from_str("else");
     pub static ref KEYWORD_RETURN: Symbol = Symbol::from_str("return");
     pub static ref KEYWORD_AS: Symbol = Symbol::from_str("as");
+    pub static ref TYPENAME_INT: Symbol = Symbol::from_str("int");
+    pub static ref TYPENAME_FLOAT: Symbol = Symbol::from_str("float");
+    pub static ref TYPENAME_STRING: Symbol = Symbol::from_str("string");
 }
