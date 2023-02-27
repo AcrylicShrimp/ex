@@ -481,7 +481,7 @@ fn parse_if(
 
     Ok(ASTIf {
         keyword_if,
-        condition,
+        expression: condition,
         body_block,
         single_else_ifs,
         single_else,
@@ -519,7 +519,7 @@ fn parse_single_else_ifs(
         single_else_ifs.push(ASTSingleElseIf {
             keyword_else,
             keyword_if,
-            condition,
+            expression: condition,
             body_block,
             span,
         });
@@ -601,40 +601,40 @@ fn parse_assignment_or_row(
 
     let (operator, operator_kind) = if let Some(id) = parser.first().kind(TokenKind::Assign) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Assign)
+        (id, None)
     } else if let Some(id) = parser.first().kind(TokenKind::AssignAdd) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Add)
+        (id, Some(ASTAssignmentOperatorKind::Add))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignSub) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Sub)
+        (id, Some(ASTAssignmentOperatorKind::Sub))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignMul) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Mul)
+        (id, Some(ASTAssignmentOperatorKind::Mul))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignDiv) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Div)
+        (id, Some(ASTAssignmentOperatorKind::Div))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignMod) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Mod)
+        (id, Some(ASTAssignmentOperatorKind::Mod))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignPow) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Pow)
+        (id, Some(ASTAssignmentOperatorKind::Pow))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignBitOr) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::BitOr)
+        (id, Some(ASTAssignmentOperatorKind::BitOr))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignBitAnd) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::BitAnd)
+        (id, Some(ASTAssignmentOperatorKind::BitAnd))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignBitXor) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::BitXor)
+        (id, Some(ASTAssignmentOperatorKind::BitXor))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignShl) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Shl)
+        (id, Some(ASTAssignmentOperatorKind::Shl))
     } else if let Some(id) = parser.first().kind(TokenKind::AssignShr) {
         parser.consume();
-        (id, ASTAssignmentOperatorKind::Shr)
+        (id, Some(ASTAssignmentOperatorKind::Shr))
     } else {
         let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
             parser.consume();
@@ -1008,7 +1008,13 @@ fn parse_unary_expression(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<ASTExpression, ()> {
-    let (operator, operator_kind) = if let Some(id) = parser.first().kind(TokenKind::BitNot) {
+    let (operator, operator_kind) = if let Some(id) = parser.first().kind(TokenKind::Add) {
+        parser.consume();
+        (id, ASTUnaryOperatorKind::Plus)
+    } else if let Some(id) = parser.first().kind(TokenKind::Sub) {
+        parser.consume();
+        (id, ASTUnaryOperatorKind::Minus)
+    } else if let Some(id) = parser.first().kind(TokenKind::BitNot) {
         parser.consume();
         (id, ASTUnaryOperatorKind::BitNot)
     } else if let Some(id) = parser.first().kind(TokenKind::LogNot) {

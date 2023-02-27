@@ -142,7 +142,7 @@ fn convert(token: LowToken, low: Pos, file: &SourceFile) -> Option<Token> {
                     None,
                 ),
                 LowTokenLiteralKind::String { terminated } => TokenLiteral::new(
-                    TokenLiteralKind::Character { terminated },
+                    TokenLiteralKind::String { terminated },
                     Symbol::from_str(content),
                     None,
                 ),

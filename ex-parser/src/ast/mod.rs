@@ -131,7 +131,7 @@ pub struct ASTBlock {
 #[derive(Debug, Clone, Hash)]
 pub struct ASTIf {
     pub keyword_if: Id,
-    pub condition: ASTExpression,
+    pub expression: ASTExpression,
     pub body_block: ASTBlock,
     pub single_else_ifs: Vec<ASTSingleElseIf>,
     pub single_else: Option<ASTSingleElse>,
@@ -142,7 +142,7 @@ pub struct ASTIf {
 pub struct ASTSingleElseIf {
     pub keyword_else: Id,
     pub keyword_if: Id,
-    pub condition: ASTExpression,
+    pub expression: ASTExpression,
     pub body_block: ASTBlock,
     pub span: Span,
 }
@@ -166,7 +166,7 @@ pub struct ASTReturn {
 pub struct ASTAssignment {
     pub left: ASTExpression,
     pub operator: Id,
-    pub operator_kind: ASTAssignmentOperatorKind,
+    pub operator_kind: Option<ASTAssignmentOperatorKind>,
     pub right: ASTExpression,
     pub semicolon: Id,
     pub span: Span,
@@ -174,7 +174,6 @@ pub struct ASTAssignment {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ASTAssignmentOperatorKind {
-    Assign,
     Add,
     Sub,
     Mul,
@@ -255,6 +254,8 @@ pub struct ASTUnaryExpression {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ASTUnaryOperatorKind {
+    Plus,
+    Minus,
     BitNot,
     LogNot,
 }

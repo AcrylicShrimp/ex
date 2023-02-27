@@ -13,6 +13,7 @@ ex-parser = { path = "ex-parser" }
 ex-resolve-ref = { path = "ex-resolve-ref" }
 ex-span = { path = "ex-span" }
 ex-symbol = { path = "ex-symbol" }
+ex-type-checking = { path = "ex-type-checking" }
 regex = { version = "1" }
 
 [workspace]
@@ -21,5 +22,6 @@ members = [
   "ex-parser",
   "ex-resolve-ref",
   "ex-span",
-  "ex-symbol"
+  "ex-symbol",
+  "ex-type-checking"
 ]

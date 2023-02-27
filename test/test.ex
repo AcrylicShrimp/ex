@@ -1,34 +1,26 @@
 
 # This is a comment.
 
-fn random(): int {
-
+fn print(x: int) {
+  
 }
 
-fn print(abc: integer) {
-  let a: MyType = 10;
-  let b = a as MyTypeTwo;
+fn fib(n: int): int {
+  if n <= 1 {
+    return n;
+  }
+  let x;
+  x = "10";
+  let y;
+  fib(y);
+  return (fib(n - 1) + fib(n - 2)) * "10";
 }
 
 fn main() {
-  let a = 10;
-  let b = 20;
-  let c = random();
-  print(a + b + c);
+  print(+fib(10));
 }
 
-fn test(a: string, b: Type, c: int,): int { }
-
-fn test2(a: int) {
-  if a == 0 {
-    return 0;
-  } else if a == 1 {
-    return 1;
-  } else if a == 2 {
-    return 2;
-  } else {
-    a = 10;
-  }
-
-  return test2(a - 1) + a as int;
+fn test(n: int) {
+  let x: string;
+  test(x * 1);
 }

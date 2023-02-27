@@ -3,6 +3,7 @@ use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::parse_ast;
 use ex_resolve_ref::resolve_ast;
 use ex_span::SourceMap;
+use ex_type_checking::{check_types, propagate_type_variables};
 use regex::Regex;
 use std::sync::{mpsc::channel, Arc};
 
@@ -17,12 +18,33 @@ fn main() {
         let diagnostics = Arc::new(sender);
         let ast = parse_ast(file.clone(), diagnostics.clone());
 
-        let ast_string = format!("{:#?}", ast);
-        let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
-        let clean_ast_string = regex.replace_all(&ast_string, "");
+        // let ast_string = format!("{:#?}", ast);
+        // let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
+        // let clean_ast_string = regex.replace_all(&ast_string, "");
 
         let (function_table, symbol_reference_table, type_reference_table) =
             resolve_ast(&ast, &file, &diagnostics);
+
+        let type_table_builder = propagate_type_variables(
+            &function_table,
+            &symbol_reference_table,
+            &type_reference_table,
+            &ast,
+            &file,
+            &diagnostics,
+        );
+
+        let type_table = type_table_builder.resolve();
+
+        check_types(
+            &type_table,
+            &type_reference_table,
+            &ast,
+            &file,
+            &diagnostics,
+        );
+
+        // println!("{:#?}", type_table);
     }
 
     while let Ok(diagnostics) = receiver.recv() {
@@ -46,16 +68,22 @@ fn write_diagnostics(diagnostics: &Diagnostics) {
             write_diagnostics_origin(origin);
         }
     }
+
+    eprintln!();
 }
 
 fn write_diagnostics_origin(origin: &DiagnosticsOrigin) {
     if let Some(path) = origin.file.path() {
         let line_col = origin.file.find_line_col(origin.span.low);
         eprintln!(
-            "at {}:{}:{}",
-            path.display(),
-            line_col.line + 1,
-            line_col.column + 1
+            "{}",
+            format!(
+                "at {}:{}:{}",
+                path.display(),
+                line_col.line + 1,
+                line_col.column + 1
+            )
+            .bold()
         )
     } else {
         let line_col = origin.file.find_line_col(origin.span.low);

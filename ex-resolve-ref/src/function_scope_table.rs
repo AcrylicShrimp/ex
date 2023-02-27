@@ -40,12 +40,12 @@ impl FunctionScopeTable {
         }
     }
 
-    pub fn scope(&self, node: ScopeId) -> &Scope {
-        self.scopes.get(&node).unwrap()
+    pub fn scope(&self, scope: ScopeId) -> &Scope {
+        self.scopes.get(&scope).unwrap()
     }
 
-    pub fn scope_mut(&mut self, node: ScopeId) -> &mut Scope {
-        self.scopes.get_mut(&node).unwrap()
+    pub fn scope_mut(&mut self, scope: ScopeId) -> &mut Scope {
+        self.scopes.get_mut(&scope).unwrap()
     }
 
     pub fn node_scope(&self, node: NodeId) -> &Scope {

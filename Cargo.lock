@@ -111,6 +111,7 @@ dependencies = [
  "ex-resolve-ref",
  "ex-span",
  "ex-symbol",
+ "ex-type-checking",
  "regex",
 ]
 
@@ -157,6 +158,18 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "rustc-hash",
+]
+
+[[package]]
+name = "ex-type-checking"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-resolve-ref",
+ "ex-span",
+ "ex-symbol",
+ "lazy_static",
 ]
 
 [[package]]

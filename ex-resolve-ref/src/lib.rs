@@ -43,12 +43,29 @@ pub fn resolve_ast(
                         .iter()
                         .map(|parameter| parameter.name)
                         .collect(),
+                    ast.signature
+                        .parameters
+                        .iter()
+                        .map(|parameter| parameter.typename.clone())
+                        .collect(),
+                    ast.signature
+                        .return_type
+                        .as_ref()
+                        .map(|return_type| return_type.typename.clone()),
                 );
                 let scope_table = resolve_scopes(&function, ast, file, diagnostics);
 
-                match function_table.functions.entry(ast.signature.name.symbol) {
+                function_table.functions.insert(top_level.id, function);
+                function_table
+                    .function_scopes
+                    .insert(top_level.id, scope_table);
+
+                match function_table
+                    .function_symbols
+                    .entry(ast.signature.name.symbol)
+                {
                     Entry::Occupied(entry) => {
-                        let previous = entry.get();
+                        let previous = function_table.functions.get(entry.get()).unwrap();
                         diagnostics
                             .send(Diagnostics {
                                 level: DiagnosticsLevel::Error,
@@ -73,13 +90,9 @@ pub fn resolve_ast(
                         continue;
                     }
                     Entry::Vacant(entry) => {
-                        entry.insert(function);
+                        entry.insert(top_level.id);
                     }
                 }
-
-                function_table
-                    .function_scopes
-                    .insert(ast.signature.name.symbol, scope_table);
 
                 functions.push(ast);
             }
@@ -90,8 +103,7 @@ pub fn resolve_ast(
 
     for ast in functions {
         let scope_table = function_table
-            .function_scopes
-            .get(&ast.signature.name.symbol)
+            .lookup_scope(ast.signature.name.symbol)
             .unwrap();
         resolve_symbol_references(
             &mut symbol_reference_table,
@@ -161,7 +173,7 @@ fn resolve_scopes_stmt_block(
                     .symbol_table
                     .symbols
                     .push(SymbolNode::new(
-                        SymbolNodeKind::Variable,
+                        SymbolNodeKind::variable(new_scope),
                         statement.id,
                         stmt_let.name,
                     ));
@@ -182,7 +194,7 @@ fn resolve_scopes_stmt_block(
                 resolve_scopes_expression(
                     scope,
                     scope_table,
-                    &stmt_if.condition,
+                    &stmt_if.expression,
                     file,
                     diagnostics,
                 );
@@ -200,7 +212,7 @@ fn resolve_scopes_stmt_block(
                     resolve_scopes_expression(
                         scope,
                         scope_table,
-                        &single_else_if.condition,
+                        &single_else_if.expression,
                         file,
                         diagnostics,
                     );
@@ -365,7 +377,7 @@ fn resolve_symbol_references_stmt_block(
                     symbol_reference_table,
                     scope_table,
                     function_table,
-                    &stmt_if.condition,
+                    &stmt_if.expression,
                     file,
                     diagnostics,
                 );
@@ -383,7 +395,7 @@ fn resolve_symbol_references_stmt_block(
                         symbol_reference_table,
                         scope_table,
                         function_table,
-                        &single_else_if.condition,
+                        &single_else_if.expression,
                         file,
                         diagnostics,
                     );
@@ -549,7 +561,7 @@ fn resolve_symbol_references_expression(
                 }
             }
 
-            if let Some(function) = function_table.functions.get(&expr_id_ref.reference.symbol) {
+            if let Some(function) = function_table.lookup_function(expr_id_ref.reference.symbol) {
                 symbol_reference_table.references.insert(
                     expr_id_ref.id,
                     SymbolNode::new(SymbolNodeKind::function(), function.node, function.name),
@@ -619,11 +631,20 @@ fn resolve_type_references_stmt_block(
                         diagnostics,
                     );
                 }
+
+                if let Some(let_assignment) = &stmt_let.let_assignment {
+                    resolve_type_references_expression(
+                        type_reference_table,
+                        &let_assignment.expression,
+                        file,
+                        diagnostics,
+                    );
+                }
             }
             ASTStatementKind::If(stmt_if) => {
                 resolve_type_references_expression(
                     type_reference_table,
-                    &stmt_if.condition,
+                    &stmt_if.expression,
                     file,
                     diagnostics,
                 );
@@ -637,7 +658,7 @@ fn resolve_type_references_stmt_block(
                 for single_else_if in &stmt_if.single_else_ifs {
                     resolve_type_references_expression(
                         type_reference_table,
-                        &single_else_if.condition,
+                        &single_else_if.expression,
                         file,
                         diagnostics,
                     );
@@ -769,6 +790,7 @@ fn resolve_type_reference(
     diagnostics: &Sender<Diagnostics>,
 ) {
     let type_kind = match typename.typename.symbol {
+        symbol if symbol == *ex_parser::TYPENAME_BOOL => TypeKind::boolean(),
         symbol if symbol == *ex_parser::TYPENAME_INT => TypeKind::integer(),
         symbol if symbol == *ex_parser::TYPENAME_FLOAT => TypeKind::float(),
         symbol if symbol == *ex_parser::TYPENAME_STRING => TypeKind::string(),
@@ -784,7 +806,8 @@ fn resolve_type_reference(
                     sub_diagnostics: vec![SubDiagnostics {
                         level: DiagnosticsLevel::Hint,
                         message: format!(
-                            "type must be one of {}, {}, or {}",
+                            "type must be one of {}, {}, {}, or {}",
+                            *ex_parser::TYPENAME_BOOL,
                             *ex_parser::TYPENAME_INT,
                             *ex_parser::TYPENAME_FLOAT,
                             *ex_parser::TYPENAME_STRING
