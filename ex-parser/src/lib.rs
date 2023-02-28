@@ -184,18 +184,7 @@ fn parse_function_parameters(
             return Err(());
         };
 
-        let parameter_typename = if let Some(id) = parser.first().id() {
-            parser.consume();
-            id
-        } else {
-            unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
-            return Err(());
-        };
-        let parameter_typename = Typename {
-            span: parameter_typename.span,
-            id: id_alloc.allocate(),
-            typename: parameter_typename,
-        };
+        let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
         let comma = parser.first().kind(TokenKind::Comma);
         if comma.is_some() {
@@ -204,12 +193,12 @@ fn parse_function_parameters(
 
         let span = parameter_name
             .span
-            .to(comma.map_or_else(|| parameter_typename.span, |comma| comma.span));
+            .to(comma.map_or_else(|| typename.span, |comma| comma.span));
 
         parameters.push(ASTFunctionParameter {
             name: parameter_name,
             colon,
-            typename: parameter_typename,
+            typename,
             comma,
             span,
         })
@@ -232,18 +221,7 @@ fn parse_function_return_type(
         return Err(());
     };
 
-    let typename = if let Some(id) = parser.first().id() {
-        parser.consume();
-        id
-    } else {
-        unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
-        return Err(());
-    };
-    let typename = Typename {
-        span: typename.span,
-        id: id_alloc.allocate(),
-        typename: typename,
-    };
+    let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
     let span = colon.span.to(typename.span);
 
@@ -401,18 +379,7 @@ fn parse_let_type(
         return Err(());
     };
 
-    let typename = if let Some(id) = parser.first().id() {
-        parser.consume();
-        id
-    } else {
-        unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
-        return Err(());
-    };
-    let typename = Typename {
-        span: typename.span,
-        id: id_alloc.allocate(),
-        typename: typename,
-    };
+    let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
     let span = colon.span.to(typename.span);
 
@@ -635,6 +602,9 @@ fn parse_assignment_or_row(
     } else if let Some(id) = parser.first().kind(TokenKind::AssignShr) {
         parser.consume();
         (id, Some(ASTAssignmentOperatorKind::Shr))
+    } else if let Some(id) = parser.first().kind(TokenKind::AssignBitNot) {
+        parser.consume();
+        (id, Some(ASTAssignmentOperatorKind::BitNot))
     } else {
         let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
             parser.consume();
@@ -1056,18 +1026,7 @@ fn parse_as_expression(
             break;
         };
 
-        let typename = if let Some(id) = parser.first().id() {
-            parser.consume();
-            id
-        } else {
-            unexpected_token(parser.first(), &[*crate::KEYWORD_AS], file, diagnostics);
-            return Err(());
-        };
-        let typename = Typename {
-            span: typename.span,
-            id: id_alloc.allocate(),
-            typename: typename,
-        };
+        let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
         let span = left.span.to(typename.span);
 
@@ -1234,6 +1193,154 @@ fn parse_paren_expression(
         paren_open,
         expression: Box::new(expression),
         paren_close,
+        span,
+    })
+}
+
+fn parse_typename(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<Typename, ()> {
+    if parser.first().is_keyword(*crate::KEYWORD_FN) {
+        let function = parse_typename_function(id_alloc, parser, file, diagnostics)?;
+        Ok(Typename {
+            span: function.span,
+            id: id_alloc.allocate(),
+            kind: TypenameKind::Function(function),
+        })
+    } else if let Some(id) = parser.first().id() {
+        parser.consume();
+        Ok(Typename {
+            span: id.span,
+            id: id_alloc.allocate(),
+            kind: TypenameKind::Id(id),
+        })
+    } else {
+        unexpected_token(
+            parser.first(),
+            &[*crate::KEYWORD_FN, *crate::ID],
+            file,
+            diagnostics,
+        );
+        return Err(());
+    }
+}
+
+fn parse_typename_function(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<TypenameFunction, ()> {
+    let keyword_fn = if let Some(id) = parser.first().keyword(*crate::KEYWORD_FN) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::KEYWORD_FN], file, diagnostics);
+        return Err(());
+    };
+
+    let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::OPEN_PAREN], file, diagnostics);
+        return Err(());
+    };
+
+    let parameters = parse_typename_function_parameters(id_alloc, parser, file, diagnostics)?;
+
+    let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(
+            parser.first(),
+            &[*crate::COMMA, *crate::CLOSE_PAREN],
+            file,
+            diagnostics,
+        );
+        return Err(());
+    };
+
+    let return_type = if parser.first().is_kind(TokenKind::Colon) {
+        Some(parse_typename_function_return_type(
+            id_alloc,
+            parser,
+            file,
+            diagnostics,
+        )?)
+    } else {
+        None
+    };
+
+    let span = keyword_fn.span.to(return_type
+        .as_ref()
+        .map_or_else(|| paren_close.span, |return_type| return_type.span));
+
+    Ok(TypenameFunction {
+        keyword_fn,
+        paren_open,
+        parameters,
+        paren_close,
+        return_type,
+        span,
+    })
+}
+
+fn parse_typename_function_parameters(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<Vec<TypenameFunctionParameter>, ()> {
+    let mut parameters = Vec::new();
+
+    while parser.is_exists() && !parser.first().is_kind(TokenKind::CloseParen) {
+        let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
+
+        let comma = parser.first().kind(TokenKind::Comma);
+        if comma.is_some() {
+            parser.consume();
+        }
+
+        let span = typename
+            .span
+            .to(comma.map_or_else(|| typename.span, |comma| comma.span));
+
+        parameters.push(TypenameFunctionParameter {
+            typename: Box::new(typename),
+            comma,
+            span,
+        })
+    }
+
+    Ok(parameters)
+}
+
+fn parse_typename_function_return_type(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<TypenameFunctionReturnType, ()> {
+    let colon = if let Some(id) = parser.first().kind(TokenKind::Colon) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::COLON], file, diagnostics);
+        return Err(());
+    };
+
+    let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
+
+    let span = colon.span.to(typename.span);
+
+    Ok(TypenameFunctionReturnType {
+        colon,
+        typename: Box::new(typename),
         span,
     })
 }

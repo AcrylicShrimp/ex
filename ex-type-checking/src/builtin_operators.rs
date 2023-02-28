@@ -83,13 +83,28 @@ impl BuiltInAssignmentOperator {
                 ),
                 (
                     ASTAssignmentOperatorKind::BitOr,
+                    TypeKind::boolean(),
+                    TypeKind::boolean(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitOr,
                     TypeKind::integer(),
                     TypeKind::integer(),
                 ),
                 (
                     ASTAssignmentOperatorKind::BitAnd,
+                    TypeKind::boolean(),
+                    TypeKind::boolean(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitAnd,
                     TypeKind::integer(),
                     TypeKind::integer(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitXor,
+                    TypeKind::boolean(),
+                    TypeKind::boolean(),
                 ),
                 (
                     ASTAssignmentOperatorKind::BitXor,
@@ -103,6 +118,11 @@ impl BuiltInAssignmentOperator {
                 ),
                 (
                     ASTAssignmentOperatorKind::Shr,
+                    TypeKind::integer(),
+                    TypeKind::integer(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitNot,
                     TypeKind::integer(),
                     TypeKind::integer(),
                 ),
@@ -475,6 +495,14 @@ impl BuiltInBinaryOperator {
                 (
                     (
                         ASTBinaryOperatorKind::BitOr,
+                        TypeKind::boolean(),
+                        TypeKind::boolean(),
+                    ),
+                    TypeKind::boolean(),
+                ),
+                (
+                    (
+                        ASTBinaryOperatorKind::BitOr,
                         TypeKind::integer(),
                         TypeKind::integer(),
                     ),
@@ -483,10 +511,26 @@ impl BuiltInBinaryOperator {
                 (
                     (
                         ASTBinaryOperatorKind::BitAnd,
+                        TypeKind::boolean(),
+                        TypeKind::boolean(),
+                    ),
+                    TypeKind::boolean(),
+                ),
+                (
+                    (
+                        ASTBinaryOperatorKind::BitAnd,
                         TypeKind::integer(),
                         TypeKind::integer(),
                     ),
                     TypeKind::integer(),
+                ),
+                (
+                    (
+                        ASTBinaryOperatorKind::BitXor,
+                        TypeKind::boolean(),
+                        TypeKind::boolean(),
+                    ),
+                    TypeKind::boolean(),
                 ),
                 (
                     (

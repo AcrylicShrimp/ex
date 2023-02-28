@@ -1,4 +1,5 @@
 use ex_parser::{Id, NodeId};
+use ex_span::Span;
 use std::{collections::HashMap, fmt::Display};
 
 #[derive(Default, Debug, Clone)]
@@ -14,13 +15,13 @@ impl TypeReferenceTable {
 
 #[derive(Debug, Clone, Hash)]
 pub struct TypeReference {
-    pub id: Id,
     pub kind: TypeKind,
+    pub span: Span,
 }
 
 impl TypeReference {
-    pub fn new(id: Id, kind: TypeKind) -> Self {
-        Self { id, kind }
+    pub fn new(kind: TypeKind, span: Span) -> Self {
+        Self { kind, span }
     }
 }
 

@@ -15,7 +15,7 @@ pub use type_reference_table::*;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
 use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTProgram, ASTStatementKind,
-    ASTTopLevelKind, Typename,
+    ASTTopLevelKind, Typename, TypenameKind,
 };
 use ex_span::SourceFile;
 use std::{
@@ -789,39 +789,60 @@ fn resolve_type_reference(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
-    let type_kind = match typename.typename.symbol {
-        symbol if symbol == *ex_parser::TYPENAME_BOOL => TypeKind::boolean(),
-        symbol if symbol == *ex_parser::TYPENAME_INT => TypeKind::integer(),
-        symbol if symbol == *ex_parser::TYPENAME_FLOAT => TypeKind::float(),
-        symbol if symbol == *ex_parser::TYPENAME_STRING => TypeKind::string(),
-        symbol => {
-            diagnostics
-                .send(Diagnostics {
-                    level: DiagnosticsLevel::Error,
-                    message: format!("unresolved type reference {}", symbol),
-                    origin: Some(DiagnosticsOrigin {
-                        file: file.clone(),
-                        span: typename.typename.span,
-                    }),
-                    sub_diagnostics: vec![SubDiagnostics {
-                        level: DiagnosticsLevel::Hint,
-                        message: format!(
-                            "type must be one of {}, {}, {}, or {}",
-                            *ex_parser::TYPENAME_BOOL,
-                            *ex_parser::TYPENAME_INT,
-                            *ex_parser::TYPENAME_FLOAT,
-                            *ex_parser::TYPENAME_STRING
-                        ),
-                        origin: None,
-                    }],
-                })
-                .unwrap();
-            TypeKind::unknown()
-        }
-    };
+    let type_kind = resolve_type_kind(typename, file, diagnostics);
+    type_reference_table
+        .references
+        .insert(typename.id, TypeReference::new(type_kind, typename.span));
+}
 
-    type_reference_table.references.insert(
-        typename.id,
-        TypeReference::new(typename.typename, type_kind),
-    );
+fn resolve_type_kind(
+    typename: &Typename,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> TypeKind {
+    match &typename.kind {
+        TypenameKind::Id(id) => match id.symbol {
+            symbol if symbol == *ex_parser::TYPENAME_BOOL => TypeKind::boolean(),
+            symbol if symbol == *ex_parser::TYPENAME_INT => TypeKind::integer(),
+            symbol if symbol == *ex_parser::TYPENAME_FLOAT => TypeKind::float(),
+            symbol if symbol == *ex_parser::TYPENAME_STRING => TypeKind::string(),
+            symbol => {
+                diagnostics
+                    .send(Diagnostics {
+                        level: DiagnosticsLevel::Error,
+                        message: format!("unresolved type reference {}", symbol),
+                        origin: Some(DiagnosticsOrigin {
+                            file: file.clone(),
+                            span: typename.span,
+                        }),
+                        sub_diagnostics: vec![SubDiagnostics {
+                            level: DiagnosticsLevel::Hint,
+                            message: format!(
+                                "type must be one of {}, {}, {}, {}, or {}",
+                                *ex_parser::TYPENAME_BOOL,
+                                *ex_parser::TYPENAME_INT,
+                                *ex_parser::TYPENAME_FLOAT,
+                                *ex_parser::TYPENAME_STRING,
+                                *ex_parser::KEYWORD_FN
+                            ),
+                            origin: None,
+                        }],
+                    })
+                    .unwrap();
+                TypeKind::unknown()
+            }
+        },
+        TypenameKind::Function(function) => TypeKind::callable(
+            function
+                .parameters
+                .iter()
+                .map(|parameter| resolve_type_kind(&parameter.typename, file, diagnostics))
+                .collect(),
+            function
+                .return_type
+                .as_ref()
+                .map(|return_type| resolve_type_kind(&return_type.typename, file, diagnostics))
+                .unwrap_or_else(|| TypeKind::empty()),
+        ),
+    }
 }

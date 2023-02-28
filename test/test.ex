@@ -5,6 +5,10 @@ fn print(x: int) {
   
 }
 
+fn on_event(event: string, cb1: fn(), cb1: fn(string,): string) {
+
+}
+
 fn fib(n: int): int {
   if n <= 1 {
     return n;
@@ -12,8 +16,9 @@ fn fib(n: int): int {
   let x;
   x = "10";
   let y;
+  y ~= y;
   fib(y);
-  return (fib(n - 1) + fib(n - 2)) * "10";
+  return (fib(n - 1) + fib(n - 2));
 }
 
 fn main() {
@@ -21,6 +26,6 @@ fn main() {
 }
 
 fn test(n: int) {
-  let x: string;
+  let x: int;
   test(x * 1);
 }

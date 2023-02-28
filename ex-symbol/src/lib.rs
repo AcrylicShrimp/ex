@@ -26,13 +26,13 @@ impl Symbol {
 
 impl Display for Symbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.to_str())
+        write!(f, "`{}`", self.to_str())
     }
 }
 
 impl Debug for Symbol {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.to_str())
+        write!(f, "`{}`", self.to_str())
     }
 }
 

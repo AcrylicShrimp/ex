@@ -1,9 +1,7 @@
 mod builtin_operators;
-mod type_candidate_table;
 mod type_table;
 
 pub use builtin_operators::*;
-pub use type_candidate_table::*;
 pub use type_table::*;
 
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
@@ -235,7 +233,7 @@ pub fn check_types_stmt_block(
                                             ),
                                             origin: Some(DiagnosticsOrigin {
                                                 file: file.clone(),
-                                                span: function_return_type_reference.id.span,
+                                                span: function_return_type_reference.span,
                                             }),
                                         }],
                                     })
@@ -257,7 +255,7 @@ pub fn check_types_stmt_block(
                                     message: format!("the function returns a value"),
                                     origin: Some(DiagnosticsOrigin {
                                         file: file.clone(),
-                                        span: function_return_type_reference.id.span,
+                                        span: function_return_type_reference.span,
                                     }),
                                 }],
                             })

@@ -11,7 +11,37 @@ use ex_symbol::Symbol;
 #[derive(Debug, Clone, Hash)]
 pub struct Typename {
     pub id: NodeId,
-    pub typename: Id,
+    pub kind: TypenameKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub enum TypenameKind {
+    Id(Id),
+    Function(TypenameFunction),
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct TypenameFunction {
+    pub keyword_fn: Id,
+    pub paren_open: Id,
+    pub parameters: Vec<TypenameFunctionParameter>,
+    pub paren_close: Id,
+    pub return_type: Option<TypenameFunctionReturnType>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct TypenameFunctionParameter {
+    pub typename: Box<Typename>,
+    pub comma: Option<Id>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct TypenameFunctionReturnType {
+    pub colon: Id,
+    pub typename: Box<Typename>,
     pub span: Span,
 }
 
@@ -185,6 +215,7 @@ pub enum ASTAssignmentOperatorKind {
     BitXor,
     Shl,
     Shr,
+    BitNot,
 }
 
 #[derive(Debug, Clone, Hash)]
