@@ -1,4 +1,4 @@
-use ex_parser::{Id, NodeId};
+use ex_parser::NodeId;
 use ex_span::Span;
 use std::{collections::HashMap, fmt::Display};
 
