@@ -1,7 +1,5 @@
 use ex_parser::{Id, NodeId};
 
-use crate::ScopeId;
-
 #[derive(Debug, Clone, Hash)]
 pub struct SymbolNode {
     pub kind: SymbolNodeKind,
@@ -19,7 +17,7 @@ impl SymbolNode {
 pub enum SymbolNodeKind {
     Function,
     Parameter { index: usize },
-    Variable { scope: ScopeId },
+    Variable,
 }
 
 impl SymbolNodeKind {
@@ -31,8 +29,8 @@ impl SymbolNodeKind {
         Self::Parameter { index }
     }
 
-    pub fn variable(scope: ScopeId) -> Self {
-        Self::Variable { scope }
+    pub fn variable() -> Self {
+        Self::Variable
     }
 
     pub fn is_function(&self) -> bool {

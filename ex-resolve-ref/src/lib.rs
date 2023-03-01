@@ -174,7 +174,7 @@ fn resolve_scopes_stmt_block(
                     .symbol_table
                     .symbols
                     .push(SymbolNode::new(
-                        SymbolNodeKind::variable(new_scope),
+                        SymbolNodeKind::variable(),
                         statement.id,
                         stmt_let.name,
                     ));

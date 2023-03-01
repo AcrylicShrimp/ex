@@ -106,15 +106,28 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "colored",
+ "ex-codegen",
  "ex-control-flow-checking",
  "ex-diagnostics",
- "ex-ir",
  "ex-parser",
  "ex-resolve-ref",
  "ex-span",
  "ex-symbol",
  "ex-type-checking",
+ "ex-vm",
  "regex",
+]
+
+[[package]]
+name = "ex-codegen"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-resolve-ref",
+ "ex-span",
+ "ex-symbol",
+ "ex-type-checking",
 ]
 
 [[package]]
@@ -134,18 +147,6 @@ version = "0.1.0"
 dependencies = [
  "ex-span",
  "ex-symbol",
-]
-
-[[package]]
-name = "ex-ir"
-version = "0.1.0"
-dependencies = [
- "ex-diagnostics",
- "ex-parser",
- "ex-resolve-ref",
- "ex-span",
- "ex-symbol",
- "ex-type-checking",
 ]
 
 [[package]]
@@ -195,6 +196,15 @@ dependencies = [
  "ex-span",
  "ex-symbol",
  "lazy_static",
+]
+
+[[package]]
+name = "ex-vm"
+version = "0.1.0"
+dependencies = [
+ "ex-codegen",
+ "ex-span",
+ "ex-symbol",
 ]
 
 [[package]]

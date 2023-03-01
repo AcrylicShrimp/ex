@@ -495,14 +495,6 @@ impl BuiltInBinaryOperator {
                 (
                     (
                         ASTBinaryOperatorKind::BitOr,
-                        TypeKind::boolean(),
-                        TypeKind::boolean(),
-                    ),
-                    TypeKind::boolean(),
-                ),
-                (
-                    (
-                        ASTBinaryOperatorKind::BitOr,
                         TypeKind::integer(),
                         TypeKind::integer(),
                     ),
@@ -511,26 +503,10 @@ impl BuiltInBinaryOperator {
                 (
                     (
                         ASTBinaryOperatorKind::BitAnd,
-                        TypeKind::boolean(),
-                        TypeKind::boolean(),
-                    ),
-                    TypeKind::boolean(),
-                ),
-                (
-                    (
-                        ASTBinaryOperatorKind::BitAnd,
                         TypeKind::integer(),
                         TypeKind::integer(),
                     ),
                     TypeKind::integer(),
-                ),
-                (
-                    (
-                        ASTBinaryOperatorKind::BitXor,
-                        TypeKind::boolean(),
-                        TypeKind::boolean(),
-                    ),
-                    TypeKind::boolean(),
                 ),
                 (
                     (

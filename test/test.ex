@@ -5,45 +5,45 @@ fn print(x: int) {
   
 }
 
-fn on_event(event: string, cb1: fn(), cb1: fn(string,): string) {
-
-}
+# fn on_event(event: string, cb1: fn(), cb1: fn(string,): string) {
+# 
+# }
 
 fn fib(n: int): int {
   if n <= 1 {
     return n;
   }
-  let x;
-  x = "10";
-  let y;
-  y ~= y;
-  fib(y);
-  return (fib(n - 1) + fib(n - 2));
+  return fib(n - 1) + fib(n - 2);
 }
 
 fn main() {
-  print(+fib(10));
+  print(fib(10));
+  print(10 * 12 / 4);
 }
 
-fn test(n: int) {
-  let x: int;
-  test(x * 1);
-}
-
-fn not_returning(): int {
-  if true {
-    return 10;
-  }
-}
-
-fn returning(): int {
-  if true {
-    return 1;
-  } else if true {
-    return 1;
-  } else {
-    return 2;
-  }
-
-  fib(10);
-}
+# fn main() {
+#   print(+fib(10));
+# }
+# 
+# fn test(n: int) {
+#   let x: int;
+#   test(x * 1);
+# }
+# 
+# fn not_returning(): int {
+#   if true {
+#     return 10;
+#   }
+# }
+# 
+# fn returning(): int {
+#   if true {
+#     return 1;
+#   } else if true {
+#     return 1;
+#   } else {
+#     return 2;
+#   }
+# 
+#   fib(10);
+# }

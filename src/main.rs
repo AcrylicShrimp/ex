@@ -1,10 +1,12 @@
 use colored::{ColoredString, Colorize};
+use ex_codegen::codegen;
 use ex_control_flow_checking::check_control_flow;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::parse_ast;
 use ex_resolve_ref::resolve_ast;
 use ex_span::SourceMap;
 use ex_type_checking::{check_types, propagate_type_variables};
+use ex_vm::execute;
 use regex::Regex;
 use std::sync::{mpsc::channel, Arc};
 
@@ -55,7 +57,15 @@ fn main() {
             &diagnostics,
         );
 
-        // println!("{:#?}", type_table);
+        let program = codegen(
+            &ast,
+            &function_table,
+            &type_table,
+            &type_reference_table,
+            &symbol_reference_table,
+        );
+
+        execute(&program);
     }
 
     while let Ok(diagnostics) = receiver.recv() {
