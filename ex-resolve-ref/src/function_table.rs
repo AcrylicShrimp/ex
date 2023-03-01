@@ -1,5 +1,6 @@
 use crate::FunctionScopeTable;
 use ex_parser::{Id, NodeId, Typename};
+use ex_span::Span;
 use ex_symbol::Symbol;
 use std::collections::HashMap;
 
@@ -35,6 +36,7 @@ pub struct Function {
     pub parameters: Vec<Id>,
     pub parameter_typenames: Vec<Typename>,
     pub return_typename: Option<Typename>,
+    pub span: Span,
 }
 
 impl Function {
@@ -44,6 +46,7 @@ impl Function {
         parameters: Vec<Id>,
         parameter_typenames: Vec<Typename>,
         return_typename: Option<Typename>,
+        span: Span,
     ) -> Self {
         Self {
             node,
@@ -51,6 +54,7 @@ impl Function {
             parameters,
             parameter_typenames,
             return_typename,
+            span,
         }
     }
 }

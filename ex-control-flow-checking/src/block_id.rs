@@ -1,11 +1,11 @@
 use std::num::NonZeroU64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NodeId(NonZeroU64);
+pub struct BlockId(NonZeroU64);
 
-impl NodeId {
+impl BlockId {
     pub fn new(id: u64) -> Self {
-        NodeId(NonZeroU64::new(id).unwrap())
+        BlockId(NonZeroU64::new(id).unwrap())
     }
 
     pub fn get(self) -> u64 {

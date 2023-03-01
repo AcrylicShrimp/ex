@@ -29,3 +29,21 @@ fn test(n: int) {
   let x: int;
   test(x * 1);
 }
+
+fn not_returning(): int {
+  if true {
+    return 10;
+  }
+}
+
+fn returning(): int {
+  if true {
+    return 1;
+  } else if true {
+    return 1;
+  } else {
+    return 2;
+  }
+
+  fib(10);
+}

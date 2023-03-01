@@ -26,7 +26,7 @@ impl Span {
     }
 
     pub fn contains_pos(self, other: Pos) -> bool {
-        self.low <= other && self.high >= other
+        self.low <= other && self.high > other
     }
 
     pub fn contains_span(self, other: Span) -> bool {

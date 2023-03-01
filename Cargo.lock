@@ -106,7 +106,9 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "colored",
+ "ex-control-flow-checking",
  "ex-diagnostics",
+ "ex-ir",
  "ex-parser",
  "ex-resolve-ref",
  "ex-span",
@@ -116,11 +118,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "ex-control-flow-checking"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-resolve-ref",
+ "ex-span",
+ "ex-symbol",
+]
+
+[[package]]
 name = "ex-diagnostics"
 version = "0.1.0"
 dependencies = [
  "ex-span",
  "ex-symbol",
+]
+
+[[package]]
+name = "ex-ir"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-resolve-ref",
+ "ex-span",
+ "ex-symbol",
+ "ex-type-checking",
 ]
 
 [[package]]

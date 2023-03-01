@@ -52,6 +52,7 @@ pub fn resolve_ast(
                         .return_type
                         .as_ref()
                         .map(|return_type| return_type.typename.clone()),
+                    ast.span,
                 );
                 let scope_table = resolve_scopes(&function, ast, file, diagnostics);
 

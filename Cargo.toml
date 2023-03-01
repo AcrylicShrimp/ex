@@ -8,7 +8,9 @@ edition = "2021"
 [dependencies]
 clap = { version = "4" }
 colored = { version = "2" }
+ex-control-flow-checking = { path = "ex-control-flow-checking" }
 ex-diagnostics = { path = "ex-diagnostics" }
+ex-ir = { path = "ex-ir" }
 ex-parser = { path = "ex-parser" }
 ex-resolve-ref = { path = "ex-resolve-ref" }
 ex-span = { path = "ex-span" }
@@ -18,7 +20,9 @@ regex = { version = "1" }
 
 [workspace]
 members = [
+  "ex-control-flow-checking",
   "ex-diagnostics",
+  "ex-ir",
   "ex-parser",
   "ex-resolve-ref",
   "ex-span",

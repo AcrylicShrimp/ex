@@ -34,4 +34,16 @@ impl SymbolNodeKind {
     pub fn variable(scope: ScopeId) -> Self {
         Self::Variable { scope }
     }
+
+    pub fn is_function(&self) -> bool {
+        matches!(self, Self::Function)
+    }
+
+    pub fn is_parameter(&self) -> bool {
+        matches!(self, Self::Parameter { .. })
+    }
+
+    pub fn is_variable(&self) -> bool {
+        matches!(self, Self::Variable { .. })
+    }
 }

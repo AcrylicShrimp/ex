@@ -1,4 +1,5 @@
 use colored::{ColoredString, Colorize};
+use ex_control_flow_checking::check_control_flow;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::parse_ast;
 use ex_resolve_ref::resolve_ast;
@@ -18,9 +19,11 @@ fn main() {
         let diagnostics = Arc::new(sender);
         let ast = parse_ast(file.clone(), diagnostics.clone());
 
-        // let ast_string = format!("{:#?}", ast);
-        // let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
-        // let clean_ast_string = regex.replace_all(&ast_string, "");
+        let ast_string = format!("{:#?}", ast);
+        let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
+        let clean_ast_string = regex.replace_all(&ast_string, "");
+
+        // println!("{}", clean_ast_string);
 
         let (function_table, symbol_reference_table, type_reference_table) =
             resolve_ast(&ast, &file, &diagnostics);
@@ -44,14 +47,20 @@ fn main() {
             &diagnostics,
         );
 
+        check_control_flow(
+            &function_table,
+            &symbol_reference_table,
+            &ast,
+            &file,
+            &diagnostics,
+        );
+
         // println!("{:#?}", type_table);
     }
 
     while let Ok(diagnostics) = receiver.recv() {
         write_diagnostics(&diagnostics);
     }
-
-    // println!("{}", clean_ast_string);
 }
 
 fn write_diagnostics(diagnostics: &Diagnostics) {
@@ -103,13 +112,43 @@ fn write_diagnostics_origin(origin: &DiagnosticsOrigin) {
 
     let max_line_number_width = ((line_high + 1) as f64).log(10f64).ceil() as usize;
 
+    // let visual_span = Span::new(
+    //     origin.file.line_positions()[line_low as usize],
+    //     origin.file.line_positions()[line_high as usize + 1],
+    // );
+
     for line in line_low..=line_high {
-        eprintln!(
-            "{:>width$} | {}",
-            line + 1,
-            origin.file.slice_line(line),
-            width = max_line_number_width + 1
-        );
+        let line_str = origin.file.slice_line(line);
+        let line_low_pos = origin.file.line_positions()[line as usize];
+
+        // let line_str = if origin.span.contains_span(line_span) {
+        //     &[line_str.bold()]
+        // } else if line_span.contains_span(origin.span) {
+        //     &[line_str[(origin.span.low - line_span.low).get() as usize
+        //         ..(origin.span.high - line_span.low).get() as usize]
+        //         .bold()]
+        // } else {
+        //     &[line_str.normal()]
+        // };
+
+        eprint!("{:>width$} | ", line + 1, width = max_line_number_width + 1);
+
+        for (i, c) in line_str.chars().enumerate() {
+            if origin.span.contains_pos(line_low_pos + i as u32) {
+                eprint!("{}", c.to_string().magenta());
+            } else {
+                eprint!("{}", c.to_string().normal());
+            }
+        }
+
+        eprintln!();
+
+        // eprintln!(
+        //     "{:>width$} | {}",
+        //     line + 1,
+        //     line_str,
+        //     width = max_line_number_width + 1
+        // );
     }
 }
 

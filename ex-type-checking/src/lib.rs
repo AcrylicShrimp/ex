@@ -1,8 +1,10 @@
 mod builtin_operators;
 mod type_table;
+mod type_table_builder;
 
 pub use builtin_operators::*;
 pub use type_table::*;
+pub use type_table_builder::*;
 
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
 use ex_parser::{
