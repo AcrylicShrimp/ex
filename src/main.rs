@@ -27,7 +27,7 @@ fn main() {
 
         // println!("{}", clean_ast_string);
 
-        let (function_table, symbol_reference_table, type_reference_table) =
+        let (function_table, symbol_reference_table, type_reference_table, assignment_lhs_table) =
             resolve_ast(&ast, &file, &diagnostics);
 
         let type_table_builder = propagate_type_variables(
@@ -51,6 +51,7 @@ fn main() {
 
         check_control_flow(
             &function_table,
+            &assignment_lhs_table,
             &symbol_reference_table,
             &ast,
             &file,
@@ -63,6 +64,7 @@ fn main() {
             &type_table,
             &type_reference_table,
             &symbol_reference_table,
+            &assignment_lhs_table,
         );
 
         execute(&program);

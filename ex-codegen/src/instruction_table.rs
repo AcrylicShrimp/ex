@@ -17,8 +17,4 @@ impl InstructionTable {
         self.instructions.insert(id, Instruction::new(id, kind));
         id
     }
-
-    pub fn replace(&mut self, id: InstructionId, kind: InstructionKind) {
-        self.instructions.insert(id, Instruction::new(id, kind));
-    }
 }

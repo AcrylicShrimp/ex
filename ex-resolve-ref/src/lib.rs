@@ -1,3 +1,4 @@
+mod assignment_lhs_table;
 mod function_scope_table;
 mod function_table;
 mod scope_symbol_table;
@@ -5,6 +6,7 @@ mod symbol_node;
 mod symbol_reference_table;
 mod type_reference_table;
 
+pub use assignment_lhs_table::*;
 pub use function_scope_table::*;
 pub use function_table::*;
 pub use scope_symbol_table::*;
@@ -27,10 +29,14 @@ pub fn resolve_ast(
     ast: &ASTProgram,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
-) -> (FunctionTable, SymbolReferenceTable, TypeReferenceTable) {
+) -> (
+    FunctionTable,
+    SymbolReferenceTable,
+    TypeReferenceTable,
+    AssignmentLhsTable,
+) {
     let mut functions = Vec::new();
     let mut function_table = FunctionTable::new();
-    let mut type_reference_table = TypeReferenceTable::new();
 
     for top_level in &ast.top_levels {
         match &top_level.kind {
@@ -101,6 +107,8 @@ pub fn resolve_ast(
     }
 
     let mut symbol_reference_table = SymbolReferenceTable::new();
+    let mut type_reference_table = TypeReferenceTable::new();
+    let mut assignment_lhs_table = AssignmentLhsTable::new();
 
     for ast in functions {
         let scope_table = function_table
@@ -115,9 +123,21 @@ pub fn resolve_ast(
             diagnostics,
         );
         resolve_type_references(&mut type_reference_table, ast, file, diagnostics);
+        resolve_assignment_lhs(
+            &mut assignment_lhs_table,
+            &symbol_reference_table,
+            ast,
+            file,
+            diagnostics,
+        );
     }
 
-    (function_table, symbol_reference_table, type_reference_table)
+    (
+        function_table,
+        symbol_reference_table,
+        type_reference_table,
+        assignment_lhs_table,
+    )
 }
 
 fn resolve_scopes(
@@ -248,7 +268,7 @@ fn resolve_scopes_stmt_block(
                 resolve_scopes_expression(
                     scope,
                     scope_table,
-                    &stmt_assignment.left,
+                    &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );
@@ -438,7 +458,7 @@ fn resolve_symbol_references_stmt_block(
                     symbol_reference_table,
                     scope_table,
                     function_table,
-                    &stmt_assignment.left,
+                    &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );
@@ -693,7 +713,7 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::Assignment(stmt_assignment) => {
                 resolve_type_references_expression(
                     type_reference_table,
-                    &stmt_assignment.left,
+                    &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );
@@ -846,4 +866,126 @@ fn resolve_type_kind(
                 .unwrap_or_else(|| TypeKind::empty()),
         ),
     }
+}
+
+fn resolve_assignment_lhs(
+    assignment_lhs_table: &mut AssignmentLhsTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTFunction,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    resolve_assignment_lhs_stmt_block(
+        assignment_lhs_table,
+        symbol_reference_table,
+        &ast.body_block,
+        file,
+        diagnostics,
+    );
+}
+
+fn resolve_assignment_lhs_stmt_block(
+    assignment_lhs_table: &mut AssignmentLhsTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTBlock,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    for statement in &ast.statements {
+        match &statement.kind {
+            ASTStatementKind::Block(stmt_block) => {
+                resolve_assignment_lhs_stmt_block(
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    stmt_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Let(..) => {}
+            ASTStatementKind::If(stmt_if) => {
+                resolve_assignment_lhs_stmt_block(
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    &stmt_if.body_block,
+                    file,
+                    diagnostics,
+                );
+
+                for single_else_if in &stmt_if.single_else_ifs {
+                    resolve_assignment_lhs_stmt_block(
+                        assignment_lhs_table,
+                        symbol_reference_table,
+                        &single_else_if.body_block,
+                        file,
+                        diagnostics,
+                    );
+                }
+
+                if let Some(single_else) = &stmt_if.single_else {
+                    resolve_assignment_lhs_stmt_block(
+                        assignment_lhs_table,
+                        symbol_reference_table,
+                        &single_else.body_block,
+                        file,
+                        diagnostics,
+                    );
+                }
+            }
+            ASTStatementKind::Return(..) => {}
+            ASTStatementKind::Assignment(stmt_assignment) => {
+                if let Some(lhs_kind) = resolve_assignment_lhs_expression(
+                    symbol_reference_table,
+                    &stmt_assignment.left.expression,
+                    file,
+                    diagnostics,
+                ) {
+                    assignment_lhs_table
+                        .kinds
+                        .insert(stmt_assignment.left.id, lhs_kind);
+                }
+            }
+            ASTStatementKind::Row(..) => {}
+        }
+    }
+}
+
+fn resolve_assignment_lhs_expression(
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTExpression,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Option<AssignmentLhsKind> {
+    if let ASTExpressionKind::IdReference(expr_id_ref) = &ast.kind {
+        if let Some(symbol_reference) = symbol_reference_table.references.get(&expr_id_ref.id) {
+            match &symbol_reference.kind {
+                SymbolNodeKind::Function => {}
+                SymbolNodeKind::Parameter { index } => {
+                    return Some(AssignmentLhsKind::Parameter { index: *index });
+                }
+                SymbolNodeKind::Variable => {
+                    return Some(AssignmentLhsKind::Variable {
+                        node: expr_id_ref.id,
+                    });
+                }
+            }
+        }
+    }
+
+    diagnostics
+        .send(Diagnostics {
+            level: DiagnosticsLevel::Error,
+            message: format!("invalid assignment left-hand side"),
+            origin: Some(DiagnosticsOrigin {
+                file: file.clone(),
+                span: ast.span,
+            }),
+            sub_diagnostics: vec![SubDiagnostics {
+                level: DiagnosticsLevel::Hint,
+                message: format!("left-hand side must be a variable or a parameter"),
+                origin: None,
+            }],
+        })
+        .unwrap();
+    None
 }

@@ -24,11 +24,14 @@ pub enum InstructionKind {
     },
     Jump {
         block: BlockId,
+        arguments: Vec<TemporaryId>,
     },
     Branch {
         condition: TemporaryId,
         then_block: BlockId,
+        then_arguments: Vec<TemporaryId>,
         else_block: BlockId,
+        else_arguments: Vec<TemporaryId>,
     },
     Terminate {
         temporary: Option<TemporaryId>,
@@ -50,15 +53,23 @@ impl InstructionKind {
         }
     }
 
-    pub fn jump(block: BlockId) -> Self {
-        Self::Jump { block }
+    pub fn jump(block: BlockId, arguments: Vec<TemporaryId>) -> Self {
+        Self::Jump { block, arguments }
     }
 
-    pub fn branch(condition: TemporaryId, then_block: BlockId, else_block: BlockId) -> Self {
+    pub fn branch(
+        condition: TemporaryId,
+        then_block: BlockId,
+        then_arguments: Vec<TemporaryId>,
+        else_block: BlockId,
+        else_arguments: Vec<TemporaryId>,
+    ) -> Self {
         Self::Branch {
             condition,
             then_block,
+            then_arguments,
             else_block,
+            else_arguments,
         }
     }
 

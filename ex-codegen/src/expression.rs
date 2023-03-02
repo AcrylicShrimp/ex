@@ -1,4 +1,4 @@
-use crate::{BlockId, TemporaryId, TypeId, VariableId};
+use crate::{TemporaryId, TypeId, VariableId};
 use ex_parser::TokenLiteral;
 use ex_symbol::Symbol;
 
@@ -16,9 +16,6 @@ impl Expression {
 
 #[derive(Debug, Clone, Hash)]
 pub enum ExpressionKind {
-    // Phi {
-    //     arguments: Vec<(BlockId, TemporaryId)>,
-    // },
     Binary {
         operator: BinaryOperator,
         left: TemporaryId,

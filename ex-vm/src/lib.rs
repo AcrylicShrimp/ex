@@ -1,10 +1,12 @@
 mod value;
 
+use std::collections::HashMap;
+
 pub use value::*;
 
 use ex_codegen::{
-    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Program, TypeKind,
-    UnaryOperator,
+    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Program, TemporaryId,
+    TypeKind, UnaryOperator, VariableId,
 };
 use ex_symbol::Symbol;
 
@@ -33,54 +35,87 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
         return Value::Empty;
     }
 
-    let mut stack = vec![Value::Empty; function.variable_table.variables.len()];
-    let mut temp_stack = vec![Value::Empty; function.temporary_table.temporaries.len()];
+    let mut stack: HashMap<VariableId, Value> = HashMap::new();
+    let mut temp_stack: HashMap<TemporaryId, Value> = HashMap::new();
 
     for (index, argument) in arguments.into_iter().enumerate() {
-        stack[index] = argument;
+        stack.insert(function.parameters[index].variable_id, argument);
     }
 
-    let mut basic_block = function.entry_block;
+    let mut block_id = function.entry_block;
 
     'outer: loop {
-        for instruction in &function.block_table.blocks[&basic_block].instructions {
-            let instruction = &function.instruction_table.instructions[instruction];
-
+        let basic_block = &function.block_table.blocks[&block_id];
+        for instruction in &basic_block.instructions {
+            let instruction = &basic_block.instruction_table.instructions[instruction];
             match &instruction.kind {
                 InstructionKind::Store {
                     variable,
                     temporary,
                 } => {
-                    let temporary = &temp_stack[temporary.get() as usize - 1];
-                    stack[variable.get() as usize - 1] = temporary.clone();
+                    let temporary = &temp_stack[temporary];
+                    stack.insert(*variable, temporary.clone());
                 }
                 InstructionKind::Assign {
                     temporary,
                     expression,
                 } => {
                     let value = eval_expression(program, &stack, &temp_stack, expression);
-                    temp_stack[temporary.get() as usize - 1] = value;
+                    temp_stack.insert(*temporary, value);
                 }
-                InstructionKind::Jump { block } => {
-                    basic_block = *block;
+                InstructionKind::Jump { block, arguments } => {
+                    let next_block = &function.block_table.blocks[block];
+                    let next_temp_stack = arguments
+                        .iter()
+                        .enumerate()
+                        .map(|(index, argument)| {
+                            (next_block.parameters[index], temp_stack[argument].clone())
+                        })
+                        .collect();
+                    block_id = *block;
+                    temp_stack = next_temp_stack;
                     continue 'outer;
                 }
                 InstructionKind::Branch {
                     condition,
                     then_block,
+                    then_arguments,
                     else_block,
+                    else_arguments,
                 } => {
-                    let condition = temp_stack[condition.get() as usize - 1].as_bool();
-                    if condition {
-                        basic_block = *then_block;
+                    let condition = temp_stack[condition].as_bool();
+                    let (next_temp_stack, block) = if condition {
+                        let next_block = &function.block_table.blocks[then_block];
+                        (
+                            then_arguments
+                                .iter()
+                                .enumerate()
+                                .map(|(index, argument)| {
+                                    (next_block.parameters[index], temp_stack[argument].clone())
+                                })
+                                .collect(),
+                            then_block,
+                        )
                     } else {
-                        basic_block = *else_block;
-                    }
+                        let next_block = &function.block_table.blocks[else_block];
+                        (
+                            else_arguments
+                                .iter()
+                                .enumerate()
+                                .map(|(index, argument)| {
+                                    (next_block.parameters[index], temp_stack[argument].clone())
+                                })
+                                .collect(),
+                            else_block,
+                        )
+                    };
+                    block_id = *block;
+                    temp_stack = next_temp_stack;
                     continue 'outer;
                 }
                 InstructionKind::Terminate { temporary } => {
                     return temporary
-                        .map(|temporary| temp_stack[temporary.get() as usize - 1].clone())
+                        .map(|temporary| temp_stack[&temporary].clone())
                         .unwrap_or_else(|| Value::Empty);
                 }
             }
@@ -90,8 +125,8 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
 
 fn eval_expression(
     program: &Program,
-    stack: &Vec<Value>,
-    temp_stack: &Vec<Value>,
+    stack: &HashMap<VariableId, Value>,
+    temp_stack: &HashMap<TemporaryId, Value>,
     expression: &Expression,
 ) -> Value {
     match &expression.kind {
@@ -100,8 +135,8 @@ fn eval_expression(
             left,
             right,
         } => {
-            let left = &temp_stack[left.get() as usize - 1];
-            let right = &temp_stack[right.get() as usize - 1];
+            let left = &temp_stack[left];
+            let right = &temp_stack[right];
             match (operator, left, right) {
                 (BinaryOperator::Eq, Value::Boolean(left), Value::Boolean(right)) => {
                     Value::Boolean(left == right)
@@ -245,7 +280,7 @@ fn eval_expression(
             }
         }
         ExpressionKind::Unary { operator, right } => {
-            let right = &temp_stack[right.get() as usize - 1];
+            let right = &temp_stack[right];
             match (operator, right) {
                 (UnaryOperator::Plus, Value::Integer(integer)) => Value::Integer(*integer),
                 (UnaryOperator::Plus, Value::Float(float)) => Value::Float(*float),
@@ -261,7 +296,7 @@ fn eval_expression(
             from,
             to,
         } => {
-            let value = temp_stack[expression.get() as usize - 1].clone();
+            let value = temp_stack[expression].clone();
             match (
                 &program.type_table.types[from],
                 &program.type_table.types[to],
@@ -303,13 +338,13 @@ fn eval_expression(
             expression,
             arguments,
         } => {
-            let function = match temp_stack[expression.get() as usize - 1] {
+            let function = match temp_stack[expression] {
                 Value::Callable(function) => function,
                 _ => unreachable!(),
             };
             let arguments = arguments
                 .iter()
-                .map(|argument| temp_stack[argument.get() as usize - 1].clone())
+                .map(|argument| temp_stack[argument].clone())
                 .collect();
             execute_function(program, &program.functions[&function], arguments)
         }
@@ -322,8 +357,8 @@ fn eval_expression(
                 _ => unreachable!(),
             }
         }
-        ExpressionKind::Variable { variable } => stack[variable.get() as usize - 1].clone(),
+        ExpressionKind::Variable { variable } => stack[variable].clone(),
         ExpressionKind::Function { function } => Value::Callable(function.clone()),
-        ExpressionKind::Temporary { temporary } => temp_stack[temporary.get() as usize - 1].clone(),
+        ExpressionKind::Temporary { temporary } => temp_stack[temporary].clone(),
     }
 }

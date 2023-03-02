@@ -646,6 +646,11 @@ fn parse_assignment_or_row(
         });
     };
 
+    let left = ASTAssignmentLeft {
+        span: left.span,
+        id: id_alloc.allocate(),
+        expression: left,
+    };
     let right = parse_expression(id_alloc, parser, file, diagnostics)?;
 
     let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {

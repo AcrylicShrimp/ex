@@ -194,7 +194,7 @@ pub struct ASTReturn {
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTAssignment {
-    pub left: ASTExpression,
+    pub left: ASTAssignmentLeft,
     pub operator: Id,
     pub operator_kind: Option<ASTAssignmentOperatorKind>,
     pub right: ASTExpression,
@@ -216,6 +216,13 @@ pub enum ASTAssignmentOperatorKind {
     Shl,
     Shr,
     BitNot,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTAssignmentLeft {
+    pub id: NodeId,
+    pub expression: ASTExpression,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Hash)]

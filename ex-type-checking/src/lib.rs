@@ -287,11 +287,16 @@ pub fn check_types_stmt_block(
                 }
             }
             ASTStatementKind::Assignment(stmt_assignment) => {
-                check_types_expression(type_table, &stmt_assignment.left, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    &stmt_assignment.left.expression,
+                    file,
+                    diagnostics,
+                );
                 check_types_expression(type_table, &stmt_assignment.right, file, diagnostics);
 
                 match (
-                    type_table.types.get(&stmt_assignment.left.id),
+                    type_table.types.get(&stmt_assignment.left.expression.id),
                     type_table.types.get(&stmt_assignment.right.id),
                 ) {
                     (Some(left_type_kind), Some(right_type_kind)) => {
@@ -634,7 +639,7 @@ fn propagate_type_variables_stmt_block(
                     function_table,
                     symbol_reference_table,
                     type_reference_table,
-                    &stmt_assignment.left,
+                    &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );

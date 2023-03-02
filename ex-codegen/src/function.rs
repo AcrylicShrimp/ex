@@ -1,16 +1,14 @@
 use crate::{
-    BasicBlock, BasicBlockTable, BlockId, BlockIdAllocator, InstructionId, InstructionKind,
-    InstructionTable, TemporaryTable, TypeId, VariableId, VariableTable,
+    BasicBlock, BasicBlockTable, BlockId, BlockIdAllocator, TypeId, VariableId, VariableTable,
 };
 use ex_symbol::Symbol;
+use std::iter::empty as iter_empty;
 
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Symbol,
     pub parameters: Vec<FunctionParameter>,
     pub return_type_id: TypeId,
-    pub instruction_table: InstructionTable,
-    pub temporary_table: TemporaryTable,
     pub variable_table: VariableTable,
     pub block_table: BasicBlockTable,
     block_id_allocator: BlockIdAllocator,
@@ -30,15 +28,13 @@ impl Function {
         let mut block_id_allocator = BlockIdAllocator::new();
 
         let entry_block_id = block_id_allocator.allocate();
-        let entry_block = BasicBlock::new(entry_block_id);
+        let entry_block = BasicBlock::new(entry_block_id, iter_empty());
         block_table.blocks.insert(entry_block_id, entry_block);
 
         Self {
             name,
             parameters,
             return_type_id,
-            instruction_table: InstructionTable::new(),
-            temporary_table: TemporaryTable::new(),
             variable_table,
             block_table,
             block_id_allocator,
@@ -47,35 +43,18 @@ impl Function {
         }
     }
 
-    pub fn new_block(&mut self) -> BasicBlock {
+    pub fn new_variable(&mut self, type_id: TypeId) -> VariableId {
+        self.variable_table.insert(type_id)
+    }
+
+    pub fn new_block(&mut self, parameters: impl Iterator<Item = TypeId>) -> BasicBlock {
         let id = self.block_id_allocator.allocate();
-        let block = BasicBlock::new(id);
+        let block = BasicBlock::new(id, parameters);
         block
     }
 
-    pub fn new_instruction(
-        &mut self,
-        block: &mut BasicBlock,
-        kind: InstructionKind,
-    ) -> InstructionId {
-        let id = self.instruction_table.insert(kind);
-        block.instructions.push(id);
-        id
-    }
-
-    pub fn new_instruction_indirect(
-        &mut self,
-        block_id: BlockId,
-        kind: InstructionKind,
-    ) -> InstructionId {
-        let id = self.instruction_table.insert(kind);
-        self.block_table
-            .blocks
-            .get_mut(&block_id)
-            .unwrap()
-            .instructions
-            .push(id);
-        id
+    pub fn insert_block(&mut self, block: BasicBlock) {
+        self.block_table.insert(block)
     }
 }
 

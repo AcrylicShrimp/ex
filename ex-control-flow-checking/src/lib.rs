@@ -13,12 +13,13 @@ use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTProgram, ASTStatementKind,
     ASTTopLevelKind, NodeId,
 };
-use ex_resolve_ref::{FunctionTable, SymbolReferenceTable};
+use ex_resolve_ref::{AssignmentLhsKind, AssignmentLhsTable, FunctionTable, SymbolReferenceTable};
 use ex_span::SourceFile;
 use std::sync::{mpsc::Sender, Arc};
 
 pub fn check_control_flow(
     function_table: &FunctionTable,
+    assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTProgram,
     file: &Arc<SourceFile>,
@@ -30,6 +31,7 @@ pub fn check_control_flow(
         match &top_level.kind {
             ASTTopLevelKind::Function(ast_function) => {
                 let function_cfg = build_function_cfg(
+                    assignment_lhs_table,
                     symbol_reference_table,
                     top_level.id,
                     ast_function,
@@ -43,6 +45,7 @@ pub fn check_control_flow(
 }
 
 fn build_function_cfg(
+    assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast_id: NodeId,
     ast: &ASTFunction,
@@ -55,6 +58,7 @@ fn build_function_cfg(
     let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
         &mut block_id_alloc,
         &mut function_cfg,
+        assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
         file,
@@ -76,6 +80,7 @@ fn build_function_cfg(
 fn build_function_cfg_stmt_block(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTBlock,
     file: &Arc<SourceFile>,
@@ -92,6 +97,7 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
                     block_id_alloc,
                     cfg,
+                    assignment_lhs_table,
                     symbol_reference_table,
                     stmt_block,
                     file,
@@ -120,6 +126,7 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_if(
                     block_id_alloc,
                     cfg,
+                    assignment_lhs_table,
                     symbol_reference_table,
                     stmt_if,
                     file,
@@ -158,14 +165,9 @@ fn build_function_cfg_stmt_block(
                     diagnostics,
                 );
 
-                // FIXME: Introduce a variable mapping table, so we can easily lookup which variable is being assigned to.
-                if let ASTExpressionKind::IdReference(expr_id_ref) = &stmt_assignment.left.kind {
-                    if let Some(symbol_reference) =
-                        symbol_reference_table.references.get(&expr_id_ref.id)
-                    {
-                        if symbol_reference.kind.is_variable() {
-                            cfg.initialized_variables.insert(symbol_reference.node);
-                        }
+                if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&stmt_assignment.left.id) {
+                    if let AssignmentLhsKind::Variable { node } = lhs_kind {
+                        cfg.initialized_variables.insert(*node);
                     }
                 }
             }
@@ -187,6 +189,7 @@ fn build_function_cfg_stmt_block(
 fn build_function_cfg_stmt_if(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTIf,
     file: &Arc<SourceFile>,
@@ -206,6 +209,7 @@ fn build_function_cfg_stmt_if(
     let (then_entry_id, mut then_exit_block) = build_function_cfg_stmt_block(
         block_id_alloc,
         cfg,
+        assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
         file,
@@ -230,6 +234,7 @@ fn build_function_cfg_stmt_if(
         let (then_entry_id, mut then_exit_block) = build_function_cfg_stmt_block(
             block_id_alloc,
             cfg,
+            assignment_lhs_table,
             symbol_reference_table,
             &single_else_if.body_block,
             file,
@@ -246,6 +251,7 @@ fn build_function_cfg_stmt_if(
         let (else_entry_id, mut else_exit_block) = build_function_cfg_stmt_block(
             block_id_alloc,
             cfg,
+            assignment_lhs_table,
             symbol_reference_table,
             &single_else.body_block,
             file,

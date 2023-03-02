@@ -51,11 +51,11 @@ use ex_parser::{
     ASTProgram, ASTStatementKind, ASTTopLevelKind, ASTUnaryOperatorKind, NodeId, Typename,
 };
 use ex_resolve_ref::{
-    Function as NodeFunction, FunctionTable, SymbolNodeKind, SymbolReferenceTable,
-    TypeKind as NodeTypeKind, TypeReferenceTable,
+    AssignmentLhsKind, AssignmentLhsTable, Function as NodeFunction, FunctionTable, SymbolNodeKind,
+    SymbolReferenceTable, TypeKind as NodeTypeKind, TypeReferenceTable,
 };
 use ex_type_checking::TypeTable as NodeTypeTable;
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::empty as iter_empty};
 
 pub fn codegen(
     ast: &ASTProgram,
@@ -63,6 +63,7 @@ pub fn codegen(
     node_type_table: &NodeTypeTable,
     type_reference_table: &TypeReferenceTable,
     symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
 ) -> Program {
     let mut program = Program::new();
 
@@ -77,6 +78,7 @@ pub fn codegen(
                     node_type_table,
                     type_reference_table,
                     symbol_reference_table,
+                    assignment_lhs_table,
                 );
                 program.functions.insert(function.name, function);
             }
@@ -93,6 +95,7 @@ fn codegen_function(
     node_type_table: &NodeTypeTable,
     type_reference_table: &TypeReferenceTable,
     symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
 ) -> Function {
     let mut function = Function::new(
         ast.signature.name.symbol,
@@ -122,13 +125,16 @@ fn codegen_function(
         node_type_table,
         type_reference_table,
         symbol_reference_table,
+        assignment_lhs_table,
     );
 
-    function.new_instruction_indirect(
-        function.entry_block,
-        InstructionKind::jump(inner_entry_block_id),
-    );
-    function.new_instruction(&mut inner_exit_block, InstructionKind::terminate(None));
+    function
+        .block_table
+        .blocks
+        .get_mut(&function.entry_block)
+        .unwrap()
+        .new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+    inner_exit_block.new_instruction(InstructionKind::terminate(None));
     function.exit_block = Some(inner_exit_block.id);
     function.block_table.insert(inner_exit_block);
 
@@ -144,8 +150,9 @@ fn codegen_function_stmt_block(
     node_type_table: &NodeTypeTable,
     type_reference_table: &TypeReferenceTable,
     symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
 ) -> (BlockId, BasicBlock) {
-    let mut block = function.new_block();
+    let mut block = function.new_block(iter_empty());
     let entry_block_id = block.id;
 
     for statement in &ast.statements {
@@ -160,12 +167,13 @@ fn codegen_function_stmt_block(
                     node_type_table,
                     type_reference_table,
                     symbol_reference_table,
+                    assignment_lhs_table,
                 );
-                function.new_instruction(&mut block, InstructionKind::jump(inner_entry_block_id));
+                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
-                block = function.new_block();
-                function.new_instruction(&mut inner_exit_block, InstructionKind::jump(block.id));
+                block = function.new_block(iter_empty());
+                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
                 function.block_table.insert(inner_exit_block);
             }
             ASTStatementKind::Let(stmt_let) => {
@@ -188,13 +196,10 @@ fn codegen_function_stmt_block(
                         type_reference_table,
                         symbol_reference_table,
                     );
-                    function.new_instruction(
-                        &mut block,
-                        InstructionKind::Store {
-                            variable,
-                            temporary,
-                        },
-                    );
+                    block.new_instruction(InstructionKind::Store {
+                        variable,
+                        temporary,
+                    });
                 }
             }
             ASTStatementKind::If(stmt_if) => {
@@ -207,12 +212,13 @@ fn codegen_function_stmt_block(
                     node_type_table,
                     type_reference_table,
                     symbol_reference_table,
+                    assignment_lhs_table,
                 );
-                function.new_instruction(&mut block, InstructionKind::jump(inner_entry_block_id));
+                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
-                block = function.new_block();
-                function.new_instruction(&mut inner_exit_block, InstructionKind::jump(block.id));
+                block = function.new_block(iter_empty());
+                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
                 function.block_table.insert(inner_exit_block);
             }
             ASTStatementKind::Return(stmt_return) => {
@@ -229,43 +235,34 @@ fn codegen_function_stmt_block(
                         symbol_reference_table,
                     )
                 });
-                function.new_instruction(&mut block, InstructionKind::terminate(temporary));
+                block.new_instruction(InstructionKind::terminate(temporary));
                 function.block_table.insert(block);
 
-                block = function.new_block();
+                block = function.new_block(iter_empty());
             }
             ASTStatementKind::Assignment(stmt_assignment) => {
-                // FIXME: Introduce a variable mapping table, so we can easily lookup which variable is being assigned to.
-                if let ASTExpressionKind::IdReference(expr_id_ref) = &stmt_assignment.left.kind {
-                    if let Some(symbol_reference) =
-                        symbol_reference_table.references.get(&expr_id_ref.id)
-                    {
-                        let variable = match &symbol_reference.kind {
-                            SymbolNodeKind::Function => continue,
-                            SymbolNodeKind::Parameter { index } => {
-                                function.parameters[*index].variable_id
-                            }
-                            SymbolNodeKind::Variable => node_variable_table[&symbol_reference.node],
-                        };
-                        let temporary = codegen_function_expression(
-                            &mut block,
-                            node_variable_table,
-                            type_table,
-                            function,
-                            &stmt_assignment.right,
-                            node_function,
-                            node_type_table,
-                            type_reference_table,
-                            symbol_reference_table,
-                        );
-                        function.new_instruction(
-                            &mut block,
-                            InstructionKind::Store {
-                                variable,
-                                temporary,
-                            },
-                        );
-                    }
+                if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&stmt_assignment.left.id) {
+                    let variable = match lhs_kind {
+                        AssignmentLhsKind::Parameter { index } => {
+                            function.parameters[*index].variable_id
+                        }
+                        AssignmentLhsKind::Variable { node } => node_variable_table[node],
+                    };
+                    let temporary = codegen_function_expression(
+                        &mut block,
+                        node_variable_table,
+                        type_table,
+                        function,
+                        &stmt_assignment.right,
+                        node_function,
+                        node_type_table,
+                        type_reference_table,
+                        symbol_reference_table,
+                    );
+                    block.new_instruction(InstructionKind::Store {
+                        variable,
+                        temporary,
+                    });
                 }
             }
             ASTStatementKind::Row(stmt_row) => {
@@ -296,10 +293,11 @@ fn codegen_function_stmt_if(
     node_type_table: &NodeTypeTable,
     type_reference_table: &TypeReferenceTable,
     symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
 ) -> (BlockId, BasicBlock) {
     let mut stack = Vec::new();
 
-    let mut block = function.new_block();
+    let mut block = function.new_block(iter_empty());
     let condition = codegen_function_expression(
         &mut block,
         node_variable_table,
@@ -320,18 +318,17 @@ fn codegen_function_stmt_if(
         node_type_table,
         type_reference_table,
         symbol_reference_table,
+        assignment_lhs_table,
     );
-    let end_block = function.new_block();
-    let branch_instruction = function.new_instruction(
-        &mut block,
-        InstructionKind::branch(condition, then_entry_block_id, end_block.id),
-    );
-    function.new_instruction(
-        &mut then_exit_block,
-        InstructionKind::Jump {
-            block: end_block.id,
-        },
-    );
+    let end_block = function.new_block(iter_empty());
+    let branch_instruction = block.new_instruction(InstructionKind::branch(
+        condition,
+        then_entry_block_id,
+        vec![],
+        end_block.id,
+        vec![],
+    ));
+    then_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
     function.block_table.insert(then_exit_block);
     stack.push((
         block,
@@ -342,7 +339,7 @@ fn codegen_function_stmt_if(
     ));
 
     for single_else_if in &ast.single_else_ifs {
-        let mut block = function.new_block();
+        let mut block = function.new_block(iter_empty());
         let condition = codegen_function_expression(
             &mut block,
             node_variable_table,
@@ -363,18 +360,17 @@ fn codegen_function_stmt_if(
             node_type_table,
             type_reference_table,
             symbol_reference_table,
+            assignment_lhs_table,
         );
-        let end_block = function.new_block();
-        let branch_instruction = function.new_instruction(
-            &mut block,
-            InstructionKind::branch(condition, then_entry_block_id, end_block.id),
-        );
-        function.new_instruction(
-            &mut then_exit_block,
-            InstructionKind::Jump {
-                block: end_block.id,
-            },
-        );
+        let end_block = function.new_block(iter_empty());
+        let branch_instruction = block.new_instruction(InstructionKind::branch(
+            condition,
+            then_entry_block_id,
+            vec![],
+            end_block.id,
+            vec![],
+        ));
+        then_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
         function.block_table.insert(then_exit_block);
         stack.push((
             block,
@@ -395,32 +391,40 @@ fn codegen_function_stmt_if(
             node_type_table,
             type_reference_table,
             symbol_reference_table,
+            assignment_lhs_table,
         );
-        let (_, condition, branch_instruction, then_entry_block_id, end_block) =
+        let (block, condition, branch_instruction, then_entry_block_id, end_block) =
             stack.last_mut().unwrap();
-        function.instruction_table.replace(
+        block.replace_instruction(
             *branch_instruction,
-            InstructionKind::branch(*condition, *then_entry_block_id, else_entry_id),
+            InstructionKind::branch(
+                *condition,
+                *then_entry_block_id,
+                vec![],
+                else_entry_id,
+                vec![],
+            ),
         );
-        function.new_instruction(
-            &mut else_exit_block,
-            InstructionKind::Jump {
-                block: end_block.id,
-            },
-        );
+        else_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
         function.block_table.insert(else_exit_block);
     }
 
     let (mut last_block, _, _, _, mut last_end_block) = stack.pop().unwrap();
 
-    while let Some((block, condition, branch_instruction, then_entry_block_id, end_block)) =
+    while let Some((mut block, condition, branch_instruction, then_entry_block_id, end_block)) =
         stack.pop()
     {
-        function.instruction_table.replace(
+        block.replace_instruction(
             branch_instruction,
-            InstructionKind::branch(condition, then_entry_block_id, last_end_block.id),
+            InstructionKind::branch(
+                condition,
+                then_entry_block_id,
+                vec![],
+                last_end_block.id,
+                vec![],
+            ),
         );
-        function.new_instruction(&mut last_end_block, InstructionKind::jump(end_block.id));
+        last_end_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
 
         function.block_table.insert(last_block);
         function.block_table.insert(last_end_block);
@@ -446,7 +450,7 @@ fn codegen_function_expression(
     type_reference_table: &TypeReferenceTable,
     symbol_reference_table: &SymbolReferenceTable,
 ) -> TemporaryId {
-    let temporary = match &ast.kind {
+    match &ast.kind {
         ASTExpressionKind::Binary(expr_binary) => {
             let left = codegen_function_expression(
                 block,
@@ -472,21 +476,18 @@ fn codegen_function_expression(
             );
             let type_id =
                 type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = function.temporary_table.insert(type_id);
-            function.new_instruction(
-                block,
-                InstructionKind::assign(
-                    temporary,
-                    Expression::new(
-                        ExpressionKind::binary(
-                            convert_binary_op(expr_binary.operator_kind),
-                            left,
-                            right,
-                        ),
-                        type_id,
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(
+                    ExpressionKind::binary(
+                        convert_binary_op(expr_binary.operator_kind),
+                        left,
+                        right,
                     ),
+                    type_id,
                 ),
-            );
+            ));
             temporary
         }
         ASTExpressionKind::Unary(expr_unary) => {
@@ -503,17 +504,14 @@ fn codegen_function_expression(
             );
             let type_id =
                 type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = function.temporary_table.insert(type_id);
-            function.new_instruction(
-                block,
-                InstructionKind::assign(
-                    temporary,
-                    Expression::new(
-                        ExpressionKind::unary(convert_unary_op(expr_unary.operator_kind), right),
-                        type_id,
-                    ),
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(
+                    ExpressionKind::unary(convert_unary_op(expr_unary.operator_kind), right),
+                    type_id,
                 ),
-            );
+            ));
             temporary
         }
         ASTExpressionKind::As(expr_as) => {
@@ -532,19 +530,15 @@ fn codegen_function_expression(
                 type_table,
                 node_type_table.types.get(&expr_as.expression.id).unwrap(),
             );
-            let to_type_id =
-                typename_to_type_id(type_table, type_reference_table, &expr_as.typename);
-            let temporary = function.temporary_table.insert(to_type_id);
-            function.new_instruction(
-                block,
-                InstructionKind::assign(
-                    temporary,
-                    Expression::new(
-                        ExpressionKind::convert(expression, from_type_id, to_type_id),
-                        to_type_id,
-                    ),
+            let type_id = typename_to_type_id(type_table, type_reference_table, &expr_as.typename);
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(
+                    ExpressionKind::convert(expression, from_type_id, type_id),
+                    type_id,
                 ),
-            );
+            ));
             temporary
         }
         ASTExpressionKind::Call(expr_call) => {
@@ -578,14 +572,11 @@ fn codegen_function_expression(
                 .collect();
             let type_id =
                 type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = function.temporary_table.insert(type_id);
-            function.new_instruction(
-                block,
-                InstructionKind::assign(
-                    temporary,
-                    Expression::new(ExpressionKind::call(expression, arguments), type_id),
-                ),
-            );
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(ExpressionKind::call(expression, arguments), type_id),
+            ));
             temporary
         }
         ASTExpressionKind::Paren(expr_paren) => codegen_function_expression(
@@ -602,17 +593,14 @@ fn codegen_function_expression(
         ASTExpressionKind::Literal(expr_literal) => {
             let type_id =
                 type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = function.temporary_table.insert(type_id);
-            function.new_instruction(
-                block,
-                InstructionKind::assign(
-                    temporary,
-                    Expression::new(
-                        ExpressionKind::literal(expr_literal.literal.clone()),
-                        type_id,
-                    ),
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(
+                    ExpressionKind::literal(expr_literal.literal.clone()),
+                    type_id,
                 ),
-            );
+            ));
             temporary
         }
         ASTExpressionKind::IdReference(expr_id_ref) => {
@@ -626,30 +614,24 @@ fn codegen_function_expression(
                         type_table,
                         node_type_table.types.get(&ast.id).unwrap(),
                     );
-                    let temporary = function.temporary_table.insert(type_id);
-                    function.new_instruction(
-                        block,
-                        InstructionKind::assign(
-                            temporary,
-                            Expression::new(
-                                ExpressionKind::function(symbol_reference.id.symbol),
-                                type_id,
-                            ),
+                    let temporary = block.new_temporary(type_id);
+                    block.new_instruction(InstructionKind::assign(
+                        temporary,
+                        Expression::new(
+                            ExpressionKind::function(symbol_reference.id.symbol),
+                            type_id,
                         ),
-                    );
+                    ));
                     temporary
                 }
                 SymbolNodeKind::Parameter { index } => {
                     let type_id = function.parameters[index].type_id;
                     let variable = function.parameters[index].variable_id;
-                    let temporary = function.temporary_table.insert(type_id);
-                    function.new_instruction(
-                        block,
-                        InstructionKind::assign(
-                            temporary,
-                            Expression::new(ExpressionKind::variable(variable), type_id),
-                        ),
-                    );
+                    let temporary = block.new_temporary(type_id);
+                    block.new_instruction(InstructionKind::assign(
+                        temporary,
+                        Expression::new(ExpressionKind::variable(variable), type_id),
+                    ));
                     temporary
                 }
                 SymbolNodeKind::Variable => {
@@ -658,21 +640,16 @@ fn codegen_function_expression(
                         node_type_table.types.get(&ast.id).unwrap(),
                     );
                     let variable = node_variable_table[&symbol_reference.node].clone();
-                    let temporary = function.temporary_table.insert(type_id);
-                    function.new_instruction(
-                        block,
-                        InstructionKind::assign(
-                            temporary,
-                            Expression::new(ExpressionKind::variable(variable), type_id),
-                        ),
-                    );
+                    let temporary = block.new_temporary(type_id);
+                    block.new_instruction(InstructionKind::assign(
+                        temporary,
+                        Expression::new(ExpressionKind::variable(variable), type_id),
+                    ));
                     temporary
                 }
             }
         }
-    };
-    block.temporaries.insert(temporary);
-    temporary
+    }
 }
 
 fn convert_binary_op(op: ASTBinaryOperatorKind) -> BinaryOperator {
