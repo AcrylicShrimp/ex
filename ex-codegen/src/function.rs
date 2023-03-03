@@ -12,7 +12,7 @@ pub struct Function {
     pub variable_table: VariableTable,
     pub block_table: BasicBlockTable,
     block_id_allocator: BlockIdAllocator,
-    pub entry_block: BlockId,
+    pub entry_block_id: BlockId,
 }
 
 impl Function {
@@ -37,7 +37,7 @@ impl Function {
             variable_table,
             block_table,
             block_id_allocator,
-            entry_block: entry_block_id,
+            entry_block_id,
         }
     }
 

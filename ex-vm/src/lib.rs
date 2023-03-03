@@ -41,7 +41,7 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
         stack.insert(function.parameters[index].variable_id, argument);
     }
 
-    let mut block_id = function.entry_block;
+    let mut block_id = function.entry_block_id;
 
     'outer: loop {
         let basic_block = &function.block_table.blocks[&block_id];

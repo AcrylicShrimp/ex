@@ -133,7 +133,7 @@ fn codegen_function(
     function
         .block_table
         .blocks
-        .get_mut(&function.entry_block)
+        .get_mut(&function.entry_block_id)
         .unwrap()
         .new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
     inner_exit_block.new_instruction(InstructionKind::terminate(None));
