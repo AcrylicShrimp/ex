@@ -109,6 +109,7 @@ dependencies = [
  "ex-codegen",
  "ex-control-flow-checking",
  "ex-diagnostics",
+ "ex-optimization",
  "ex-parser",
  "ex-resolve-ref",
  "ex-span",
@@ -146,6 +147,15 @@ name = "ex-diagnostics"
 version = "0.1.0"
 dependencies = [
  "ex-span",
+ "ex-symbol",
+]
+
+[[package]]
+name = "ex-optimization"
+version = "0.1.0"
+dependencies = [
+ "ex-codegen",
+ "ex-parser",
  "ex-symbol",
 ]
 

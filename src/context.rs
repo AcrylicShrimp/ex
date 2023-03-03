@@ -1,6 +1,7 @@
 use ex_codegen::{codegen, Program};
 use ex_control_flow_checking::check_control_flow;
 use ex_diagnostics::Diagnostics;
+use ex_optimization::eliminate_dead_code;
 use ex_parser::{parse_ast, ASTProgram};
 use ex_resolve_ref::{
     resolve_ast, AssignmentLhsTable, FunctionTable, SymbolReferenceTable, TypeReferenceTable,
@@ -64,13 +65,19 @@ impl Context {
     }
 
     pub fn codegen(self) -> Program {
-        codegen(
+        let mut program = codegen(
             &self.ast,
             &self.function_table,
             &self.type_table,
             &self.type_reference_table,
             &self.symbol_reference_table,
             &self.assignment_lhs_table,
-        )
+        );
+
+        for (_, function) in &mut program.functions {
+            eliminate_dead_code(function);
+        }
+
+        program
     }
 }

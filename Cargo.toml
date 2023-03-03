@@ -11,6 +11,7 @@ colored = { version = "2" }
 ex-codegen = { path = "ex-codegen" }
 ex-control-flow-checking = { path = "ex-control-flow-checking" }
 ex-diagnostics = { path = "ex-diagnostics" }
+ex-optimization = { path = "ex-optimization" }
 ex-parser = { path = "ex-parser" }
 ex-resolve-ref = { path = "ex-resolve-ref" }
 ex-span = { path = "ex-span" }
@@ -24,6 +25,7 @@ members = [
   "ex-codegen",
   "ex-control-flow-checking",
   "ex-diagnostics",
+  "ex-optimization",
   "ex-parser",
   "ex-resolve-ref",
   "ex-span",
