@@ -1,77 +1,43 @@
+mod context;
+
 use colored::{ColoredString, Colorize};
-use ex_codegen::codegen;
-use ex_control_flow_checking::check_control_flow;
+use context::Context;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
-use ex_parser::parse_ast;
-use ex_resolve_ref::resolve_ast;
 use ex_span::SourceMap;
-use ex_type_checking::{check_types, propagate_type_variables};
 use ex_vm::execute;
-use regex::Regex;
 use std::sync::{mpsc::channel, Arc};
 
 fn main() {
-    let content = include_str!("../test/test.ex");
     let mut source = SourceMap::new();
-    let file = source.add_source_file(content, "test.ex", Some("../test/test.ex"));
+    let (diagnostics, contexts) = {
+        let content = include_str!("../test/test.ex");
+        let file = source.add_source_file(content, "test.ex", Some("../test/test.ex"));
 
-    let (sender, receiver) = channel();
-
-    {
+        let (sender, receiver) = channel();
         let diagnostics = Arc::new(sender);
-        let ast = parse_ast(file.clone(), diagnostics.clone());
 
-        let ast_string = format!("{:#?}", ast);
-        let regex = Regex::new(",\\s*span:\\s*Span\\s*\\{[\\s\\S]+?\\}").unwrap();
-        let clean_ast_string = regex.replace_all(&ast_string, "");
+        let context = Context::compile(file, diagnostics.clone());
+        (receiver, vec![context])
+    };
 
-        // println!("{}", clean_ast_string);
+    let mut has_error = false;
 
-        let (function_table, symbol_reference_table, type_reference_table, assignment_lhs_table) =
-            resolve_ast(&ast, &file, &diagnostics);
+    while let Ok(diagnostics) = diagnostics.recv() {
+        if diagnostics.level == DiagnosticsLevel::Error {
+            has_error = true;
+        }
 
-        let type_table_builder = propagate_type_variables(
-            &function_table,
-            &symbol_reference_table,
-            &type_reference_table,
-            &ast,
-            &file,
-            &diagnostics,
-        );
-
-        let type_table = type_table_builder.resolve();
-
-        check_types(
-            &type_table,
-            &type_reference_table,
-            &ast,
-            &file,
-            &diagnostics,
-        );
-
-        check_control_flow(
-            &function_table,
-            &assignment_lhs_table,
-            &symbol_reference_table,
-            &ast,
-            &file,
-            &diagnostics,
-        );
-
-        let program = codegen(
-            &ast,
-            &function_table,
-            &type_table,
-            &type_reference_table,
-            &symbol_reference_table,
-            &assignment_lhs_table,
-        );
-
-        execute(&program);
+        write_diagnostics(&diagnostics);
     }
 
-    while let Ok(diagnostics) = receiver.recv() {
-        write_diagnostics(&diagnostics);
+    if has_error {
+        eprintln!("{}", "compilation failed".red());
+        return;
+    }
+
+    for context in contexts {
+        let program = context.codegen();
+        execute(&program);
     }
 }
 
