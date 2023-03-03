@@ -162,7 +162,7 @@ fn codegen_function_stmt_block(
     for statement in &ast.statements {
         match &statement.kind {
             ASTStatementKind::Block(stmt_block) => {
-                let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
+                let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
@@ -178,9 +178,7 @@ fn codegen_function_stmt_block(
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
-                block = function.new_block(iter_empty());
-                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
-                function.block_table.insert(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Let(stmt_let) => {
                 let type_id = type_kind_to_type_id(
@@ -209,7 +207,7 @@ fn codegen_function_stmt_block(
                 }
             }
             ASTStatementKind::If(stmt_if) => {
-                let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_if(
+                let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_if(
                     node_variable_table,
                     type_table,
                     function,
@@ -225,12 +223,10 @@ fn codegen_function_stmt_block(
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
-                block = function.new_block(iter_empty());
-                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
-                function.block_table.insert(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Loop(stmt_loop) => {
-                let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_loop(
+                let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_loop(
                     node_variable_table,
                     type_table,
                     function,
@@ -244,9 +240,7 @@ fn codegen_function_stmt_block(
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
-                block = function.new_block(iter_empty());
-                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
-                function.block_table.insert(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Break(..) => {
                 block.new_instruction(InstructionKind::jump(loop_exit_block_id.unwrap(), vec![]));

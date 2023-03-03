@@ -98,7 +98,7 @@ fn build_function_cfg_stmt_block(
 
         match &statement.kind {
             ASTStatementKind::Block(stmt_block) => {
-                let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
+                let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_block(
                     block_id_alloc,
                     cfg,
                     loop_entry_block_id,
@@ -112,9 +112,7 @@ fn build_function_cfg_stmt_block(
                 block.exit = Some(BasicBlockExit::jump(inner_entry_id));
                 cfg.insert_block(block);
 
-                block = BasicBlock::new(block_id_alloc.allocate());
-                inner_exit_block.exit = Some(BasicBlockExit::jump(block.id));
-                cfg.insert_block(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Let(stmt_let) => {
                 if let Some(let_assignment) = &stmt_let.let_assignment {
@@ -129,7 +127,7 @@ fn build_function_cfg_stmt_block(
                 }
             }
             ASTStatementKind::If(stmt_if) => {
-                let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_if(
+                let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_if(
                     block_id_alloc,
                     cfg,
                     loop_entry_block_id,
@@ -143,12 +141,10 @@ fn build_function_cfg_stmt_block(
                 block.exit = Some(BasicBlockExit::jump(inner_entry_id));
                 cfg.insert_block(block);
 
-                block = BasicBlock::new(block_id_alloc.allocate());
-                inner_exit_block.exit = Some(BasicBlockExit::jump(block.id));
-                cfg.insert_block(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Loop(stmt_loop) => {
-                let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_loop(
+                let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_loop(
                     block_id_alloc,
                     cfg,
                     assignment_lhs_table,
@@ -160,9 +156,7 @@ fn build_function_cfg_stmt_block(
                 block.exit = Some(BasicBlockExit::jump(inner_entry_id));
                 cfg.insert_block(block);
 
-                block = BasicBlock::new(block_id_alloc.allocate());
-                inner_exit_block.exit = Some(BasicBlockExit::jump(block.id));
-                cfg.insert_block(inner_exit_block);
+                block = inner_exit_block;
             }
             ASTStatementKind::Break(stmt_break) => match loop_exit_block_id {
                 Some(loop_exit_block_id) => {
