@@ -1,7 +1,5 @@
 mod value;
 
-use std::collections::HashMap;
-
 pub use value::*;
 
 use ex_codegen::{
@@ -9,6 +7,7 @@ use ex_codegen::{
     TypeKind, UnaryOperator, VariableId,
 };
 use ex_symbol::Symbol;
+use std::collections::HashMap;
 
 pub fn execute(program: &Program) {
     let main_function = match program.functions.get(&Symbol::from_str("main")) {
