@@ -47,7 +47,7 @@ pub use variable_id_allocator::*;
 pub use variable_table::*;
 
 use ex_parser::{
-    ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf,
+    ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTLoop,
     ASTProgram, ASTStatementKind, ASTTopLevelKind, ASTUnaryOperatorKind, NodeId, Typename,
 };
 use ex_resolve_ref::{
@@ -120,6 +120,8 @@ fn codegen_function(
         &mut node_variable_table,
         type_table,
         &mut function,
+        None,
+        None,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -145,6 +147,8 @@ fn codegen_function_stmt_block(
     node_variable_table: &mut HashMap<NodeId, VariableId>,
     type_table: &mut TypeTable,
     function: &mut Function,
+    loop_entry_block_id: Option<BlockId>,
+    loop_exit_block_id: Option<BlockId>,
     ast: &ASTBlock,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -162,6 +166,8 @@ fn codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
+                    loop_entry_block_id,
+                    loop_exit_block_id,
                     &stmt_block,
                     node_function,
                     node_type_table,
@@ -207,6 +213,8 @@ fn codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
+                    loop_entry_block_id,
+                    loop_exit_block_id,
                     &stmt_if,
                     node_function,
                     node_type_table,
@@ -220,6 +228,37 @@ fn codegen_function_stmt_block(
                 block = function.new_block(iter_empty());
                 inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
                 function.block_table.insert(inner_exit_block);
+            }
+            ASTStatementKind::Loop(stmt_loop) => {
+                let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_loop(
+                    node_variable_table,
+                    type_table,
+                    function,
+                    &stmt_loop,
+                    node_function,
+                    node_type_table,
+                    type_reference_table,
+                    symbol_reference_table,
+                    assignment_lhs_table,
+                );
+                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+                function.block_table.insert(block);
+
+                block = function.new_block(iter_empty());
+                inner_exit_block.new_instruction(InstructionKind::jump(block.id, vec![]));
+                function.block_table.insert(inner_exit_block);
+            }
+            ASTStatementKind::Break(..) => {
+                block.new_instruction(InstructionKind::jump(loop_exit_block_id.unwrap(), vec![]));
+                function.block_table.insert(block);
+
+                block = function.new_block(iter_empty());
+            }
+            ASTStatementKind::Continue(..) => {
+                block.new_instruction(InstructionKind::jump(loop_entry_block_id.unwrap(), vec![]));
+                function.block_table.insert(block);
+
+                block = function.new_block(iter_empty());
             }
             ASTStatementKind::Return(stmt_return) => {
                 let temporary = stmt_return.expression.as_ref().map(|expression| {
@@ -288,6 +327,8 @@ fn codegen_function_stmt_if(
     node_variable_table: &mut HashMap<NodeId, VariableId>,
     type_table: &mut TypeTable,
     function: &mut Function,
+    loop_entry_block_id: Option<BlockId>,
+    loop_exit_block_id: Option<BlockId>,
     ast: &ASTIf,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -313,6 +354,8 @@ fn codegen_function_stmt_if(
         node_variable_table,
         type_table,
         function,
+        loop_entry_block_id,
+        loop_exit_block_id,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -355,6 +398,8 @@ fn codegen_function_stmt_if(
             node_variable_table,
             type_table,
             function,
+            loop_entry_block_id,
+            loop_exit_block_id,
             &single_else_if.body_block,
             node_function,
             node_type_table,
@@ -386,6 +431,8 @@ fn codegen_function_stmt_if(
             node_variable_table,
             type_table,
             function,
+            loop_entry_block_id,
+            loop_exit_block_id,
             &single_else.body_block,
             node_function,
             node_type_table,
@@ -437,6 +484,43 @@ fn codegen_function_stmt_if(
     function.block_table.insert(last_block);
 
     (entry_id, last_end_block)
+}
+
+fn codegen_function_stmt_loop(
+    node_variable_table: &mut HashMap<NodeId, VariableId>,
+    type_table: &mut TypeTable,
+    function: &mut Function,
+    ast: &ASTLoop,
+    node_function: &NodeFunction,
+    node_type_table: &NodeTypeTable,
+    type_reference_table: &TypeReferenceTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
+) -> (BlockId, BasicBlock) {
+    let mut entry_block = function.new_block(iter_empty());
+    let entry_block_id = entry_block.id;
+    let exit_block = function.new_block(iter_empty());
+
+    let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
+        node_variable_table,
+        type_table,
+        function,
+        Some(entry_block_id),
+        Some(exit_block.id),
+        &ast.body_block,
+        node_function,
+        node_type_table,
+        type_reference_table,
+        symbol_reference_table,
+        assignment_lhs_table,
+    );
+    entry_block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+    function.block_table.insert(entry_block);
+
+    inner_exit_block.new_instruction(InstructionKind::jump(entry_block_id, vec![]));
+    function.block_table.insert(inner_exit_block);
+
+    (entry_block_id, exit_block)
 }
 
 fn codegen_function_expression(

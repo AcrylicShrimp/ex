@@ -259,6 +259,27 @@ fn parse_statement(
             span: if_statement.span,
             kind: ASTStatementKind::If(if_statement),
         })
+    } else if parser.first().is_keyword(*crate::KEYWORD_LOOP) {
+        let loop_statement = parse_loop(id_alloc, parser, file, diagnostics)?;
+        Ok(ASTStatement {
+            id: id_alloc.allocate(),
+            span: loop_statement.span,
+            kind: ASTStatementKind::Loop(loop_statement),
+        })
+    } else if parser.first().is_keyword(*crate::KEYWORD_BREAK) {
+        let break_statement = parse_break(parser, file, diagnostics)?;
+        Ok(ASTStatement {
+            id: id_alloc.allocate(),
+            span: break_statement.span,
+            kind: ASTStatementKind::Break(break_statement),
+        })
+    } else if parser.first().is_keyword(*crate::KEYWORD_CONTINUE) {
+        let continue_statement = parse_continue(parser, file, diagnostics)?;
+        Ok(ASTStatement {
+            id: id_alloc.allocate(),
+            span: continue_statement.span,
+            kind: ASTStatementKind::Continue(continue_statement),
+        })
     } else if parser.first().is_keyword(*crate::KEYWORD_RETURN) {
         let return_statement = parse_return(id_alloc, parser, file, diagnostics)?;
         Ok(ASTStatement {
@@ -516,6 +537,96 @@ fn parse_single_else(
     Ok(ASTSingleElse {
         keyword_else,
         body_block,
+        span,
+    })
+}
+
+fn parse_loop(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTLoop, ()> {
+    let keyword_loop = if let Some(id) = parser.first().keyword(*crate::KEYWORD_LOOP) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::KEYWORD_LOOP], file, diagnostics);
+        return Err(());
+    };
+
+    let body_block = parse_block(id_alloc, parser, file, diagnostics)?;
+
+    let span = keyword_loop.span.to(body_block.span);
+
+    Ok(ASTLoop {
+        keyword_loop,
+        body_block,
+        span,
+    })
+}
+
+fn parse_break(
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTBreak, ()> {
+    let keyword_break = if let Some(id) = parser.first().keyword(*crate::KEYWORD_BREAK) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::KEYWORD_BREAK], file, diagnostics);
+        return Err(());
+    };
+
+    let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::SEMICOLON], file, diagnostics);
+        return Err(());
+    };
+
+    let span = keyword_break.span.to(semicolon.span);
+
+    Ok(ASTBreak {
+        keyword_break,
+        semicolon,
+        span,
+    })
+}
+
+fn parse_continue(
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTContinue, ()> {
+    let keyword_continue = if let Some(id) = parser.first().keyword(*crate::KEYWORD_CONTINUE) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(
+            parser.first(),
+            &[*crate::KEYWORD_CONTINUE],
+            file,
+            diagnostics,
+        );
+        return Err(());
+    };
+
+    let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::SEMICOLON], file, diagnostics);
+        return Err(());
+    };
+
+    let span = keyword_continue.span.to(semicolon.span);
+
+    Ok(ASTContinue {
+        keyword_continue,
+        semicolon,
         span,
     })
 }

@@ -196,6 +196,18 @@ pub fn check_types_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                check_types_stmt_block(
+                    type_table,
+                    type_reference_table,
+                    ast_function,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
                     check_types_expression(type_table, &expression, file, diagnostics);
@@ -596,6 +608,20 @@ fn propagate_type_variables_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                propagate_type_variables_stmt_block(
+                    type_table_builder,
+                    function_table,
+                    symbol_reference_table,
+                    type_reference_table,
+                    ast_function,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
                     let type_var = propagate_type_variables_expression(

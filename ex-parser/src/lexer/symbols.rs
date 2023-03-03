@@ -14,6 +14,9 @@ lazy_static! {
     pub static ref COMMA: Symbol = Symbol::from_str(",");
     pub static ref COLON: Symbol = Symbol::from_str(":");
     pub static ref SEMICOLON: Symbol = Symbol::from_str(";");
+}
+
+lazy_static! {
     pub static ref ASSIGN: Symbol = Symbol::from_str("=");
     pub static ref ASSIGN_ADD: Symbol = Symbol::from_str("+=");
     pub static ref ASSIGN_SUB: Symbol = Symbol::from_str("-=");
@@ -53,12 +56,21 @@ lazy_static! {
     pub static ref MODULE_MEMBER: Symbol = Symbol::from_str("::");
     pub static ref ID: Symbol = Symbol::from_str("identifier");
     pub static ref LITERAL: Symbol = Symbol::from_str("literal");
+}
+
+lazy_static! {
     pub static ref KEYWORD_FN: Symbol = Symbol::from_str("fn");
     pub static ref KEYWORD_LET: Symbol = Symbol::from_str("let");
     pub static ref KEYWORD_IF: Symbol = Symbol::from_str("if");
     pub static ref KEYWORD_ELSE: Symbol = Symbol::from_str("else");
+    pub static ref KEYWORD_LOOP: Symbol = Symbol::from_str("loop");
+    pub static ref KEYWORD_BREAK: Symbol = Symbol::from_str("break");
+    pub static ref KEYWORD_CONTINUE: Symbol = Symbol::from_str("continue");
     pub static ref KEYWORD_RETURN: Symbol = Symbol::from_str("return");
     pub static ref KEYWORD_AS: Symbol = Symbol::from_str("as");
+}
+
+lazy_static! {
     pub static ref TYPENAME_BOOL: Symbol = Symbol::from_str("bool");
     pub static ref TYPENAME_INT: Symbol = Symbol::from_str("int");
     pub static ref TYPENAME_FLOAT: Symbol = Symbol::from_str("float");

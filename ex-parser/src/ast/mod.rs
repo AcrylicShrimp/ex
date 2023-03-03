@@ -121,6 +121,9 @@ pub enum ASTStatementKind {
     Block(ASTBlock),
     Let(ASTLet),
     If(ASTIf),
+    Loop(ASTLoop),
+    Break(ASTBreak),
+    Continue(ASTContinue),
     Return(ASTReturn),
     Assignment(ASTAssignment),
     Row(ASTRow),
@@ -169,6 +172,13 @@ pub struct ASTIf {
 }
 
 #[derive(Debug, Clone, Hash)]
+pub struct ASTLoop {
+    pub keyword_loop: Id,
+    pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
 pub struct ASTSingleElseIf {
     pub keyword_else: Id,
     pub keyword_if: Id,
@@ -181,6 +191,20 @@ pub struct ASTSingleElseIf {
 pub struct ASTSingleElse {
     pub keyword_else: Id,
     pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTBreak {
+    pub keyword_break: Id,
+    pub semicolon: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTContinue {
+    pub keyword_continue: Id,
+    pub semicolon: Id,
     pub span: Span,
 }
 

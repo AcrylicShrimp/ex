@@ -17,8 +17,18 @@ fn fib(n: int): int {
 }
 
 fn main() {
-  print(fib(10));
-  print(10 * 12 / 4);
+  let fib2 = fib;
+  let value = 0;
+
+  loop {
+    if value == 10 {
+      break;
+    }
+    value = value + 1;
+    print(value);
+    print(fib2(10) + fib(10));
+  }
+  print(1 << 2);
 }
 
 # fn main() {

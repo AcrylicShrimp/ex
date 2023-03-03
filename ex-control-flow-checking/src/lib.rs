@@ -10,8 +10,8 @@ pub use function_control_flow_graph::*;
 
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::{
-    ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTProgram, ASTStatementKind,
-    ASTTopLevelKind, NodeId,
+    ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTLoop, ASTProgram,
+    ASTStatementKind, ASTTopLevelKind, NodeId,
 };
 use ex_resolve_ref::{AssignmentLhsKind, AssignmentLhsTable, FunctionTable, SymbolReferenceTable};
 use ex_span::SourceFile;
@@ -58,6 +58,8 @@ fn build_function_cfg(
     let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
         &mut block_id_alloc,
         &mut function_cfg,
+        None,
+        None,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -80,6 +82,8 @@ fn build_function_cfg(
 fn build_function_cfg_stmt_block(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    loop_entry_block_id: Option<BlockId>,
+    loop_exit_block_id: Option<BlockId>,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTBlock,
@@ -97,6 +101,8 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
                     block_id_alloc,
                     cfg,
+                    loop_entry_block_id,
+                    loop_exit_block_id,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_block,
@@ -126,6 +132,8 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_if(
                     block_id_alloc,
                     cfg,
+                    loop_entry_block_id,
+                    loop_exit_block_id,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_if,
@@ -139,6 +147,65 @@ fn build_function_cfg_stmt_block(
                 inner_exit_block.exit = Some(BasicBlockExit::jump(block.id));
                 cfg.insert_block(inner_exit_block);
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_loop(
+                    block_id_alloc,
+                    cfg,
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    stmt_loop,
+                    file,
+                    diagnostics,
+                );
+                block.exit = Some(BasicBlockExit::jump(inner_entry_id));
+                cfg.insert_block(block);
+
+                block = BasicBlock::new(block_id_alloc.allocate());
+                inner_exit_block.exit = Some(BasicBlockExit::jump(block.id));
+                cfg.insert_block(inner_exit_block);
+            }
+            ASTStatementKind::Break(stmt_break) => match loop_exit_block_id {
+                Some(loop_exit_block_id) => {
+                    block.exit = Some(BasicBlockExit::jump(loop_exit_block_id));
+                    cfg.insert_block(block);
+
+                    block = BasicBlock::new(block_id_alloc.allocate());
+                }
+                None => {
+                    diagnostics
+                        .send(Diagnostics {
+                            level: DiagnosticsLevel::Error,
+                            message: format!("break statement outside of loop"),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: stmt_break.span,
+                            }),
+                            sub_diagnostics: vec![],
+                        })
+                        .unwrap();
+                }
+            },
+            ASTStatementKind::Continue(stmt_continue) => match loop_entry_block_id {
+                Some(loop_entry_block_id) => {
+                    block.exit = Some(BasicBlockExit::jump(loop_entry_block_id));
+                    cfg.insert_block(block);
+
+                    block = BasicBlock::new(block_id_alloc.allocate());
+                }
+                None => {
+                    diagnostics
+                        .send(Diagnostics {
+                            level: DiagnosticsLevel::Error,
+                            message: format!("continue statement outside of loop"),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: stmt_continue.span,
+                            }),
+                            sub_diagnostics: vec![],
+                        })
+                        .unwrap();
+                }
+            },
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
                     check_variable_usage(
@@ -189,6 +256,8 @@ fn build_function_cfg_stmt_block(
 fn build_function_cfg_stmt_if(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    loop_entry_block_id: Option<BlockId>,
+    loop_exit_block_id: Option<BlockId>,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTIf,
@@ -209,6 +278,8 @@ fn build_function_cfg_stmt_if(
     let (then_entry_id, mut then_exit_block) = build_function_cfg_stmt_block(
         block_id_alloc,
         cfg,
+        loop_entry_block_id,
+        loop_exit_block_id,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -234,6 +305,8 @@ fn build_function_cfg_stmt_if(
         let (then_entry_id, mut then_exit_block) = build_function_cfg_stmt_block(
             block_id_alloc,
             cfg,
+            loop_entry_block_id,
+            loop_exit_block_id,
             assignment_lhs_table,
             symbol_reference_table,
             &single_else_if.body_block,
@@ -251,6 +324,8 @@ fn build_function_cfg_stmt_if(
         let (else_entry_id, mut else_exit_block) = build_function_cfg_stmt_block(
             block_id_alloc,
             cfg,
+            loop_entry_block_id,
+            loop_exit_block_id,
             assignment_lhs_table,
             symbol_reference_table,
             &single_else.body_block,
@@ -280,6 +355,39 @@ fn build_function_cfg_stmt_if(
     cfg.insert_block(last_block);
 
     (entry_id, last_end_block)
+}
+
+fn build_function_cfg_stmt_loop(
+    block_id_alloc: &mut BlockIdAllocator,
+    cfg: &mut FunctionControlFlowGraph,
+    assignment_lhs_table: &AssignmentLhsTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTLoop,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> (BlockId, BasicBlock) {
+    let entry_block_id = block_id_alloc.allocate();
+    let mut entry_block = BasicBlock::new(entry_block_id);
+    let exit_block = BasicBlock::new(block_id_alloc.allocate());
+
+    let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
+        block_id_alloc,
+        cfg,
+        Some(entry_block_id),
+        Some(exit_block.id),
+        assignment_lhs_table,
+        symbol_reference_table,
+        &ast.body_block,
+        file,
+        diagnostics,
+    );
+    entry_block.exit = Some(BasicBlockExit::jump(inner_entry_id));
+    cfg.insert_block(entry_block);
+
+    inner_exit_block.exit = Some(BasicBlockExit::jump(entry_block_id));
+    cfg.insert_block(inner_exit_block);
+
+    (entry_block_id, exit_block)
 }
 
 fn check_variable_usage(

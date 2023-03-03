@@ -259,6 +259,18 @@ fn resolve_scopes_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                let new_scope = scope_table.new_scope(statement.id, scope);
+                resolve_scopes_stmt_block(
+                    new_scope,
+                    scope_table,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expr) = &stmt_return.expression {
                     resolve_scopes_expression(scope, scope_table, expr, file, diagnostics);
@@ -441,6 +453,18 @@ fn resolve_symbol_references_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                resolve_symbol_references_stmt_block(
+                    symbol_reference_table,
+                    scope_table,
+                    function_table,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
                     resolve_symbol_references_expression(
@@ -700,6 +724,16 @@ fn resolve_type_references_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                resolve_type_references_stmt_block(
+                    type_reference_table,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
                     resolve_type_references_expression(
@@ -932,6 +966,17 @@ fn resolve_assignment_lhs_stmt_block(
                     );
                 }
             }
+            ASTStatementKind::Loop(stmt_loop) => {
+                resolve_assignment_lhs_stmt_block(
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::Break(..) => {}
+            ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(..) => {}
             ASTStatementKind::Assignment(stmt_assignment) => {
                 if let Some(lhs_kind) = resolve_assignment_lhs_expression(
