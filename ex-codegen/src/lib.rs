@@ -137,7 +137,6 @@ fn codegen_function(
         .unwrap()
         .new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
     inner_exit_block.new_instruction(InstructionKind::terminate(None));
-    function.exit_block = Some(inner_exit_block.id);
     function.block_table.insert(inner_exit_block);
 
     function

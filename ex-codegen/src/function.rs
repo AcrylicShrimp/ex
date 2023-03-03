@@ -13,7 +13,6 @@ pub struct Function {
     pub block_table: BasicBlockTable,
     block_id_allocator: BlockIdAllocator,
     pub entry_block: BlockId,
-    pub exit_block: Option<BlockId>,
 }
 
 impl Function {
@@ -39,7 +38,6 @@ impl Function {
             block_table,
             block_id_allocator,
             entry_block: entry_block_id,
-            exit_block: None,
         }
     }
 
