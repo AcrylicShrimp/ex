@@ -965,7 +965,7 @@ fn resolve_assignment_lhs_expression(
                 }
                 SymbolNodeKind::Variable => {
                     return Some(AssignmentLhsKind::Variable {
-                        node: expr_id_ref.id,
+                        node: symbol_reference.node,
                     });
                 }
             }
