@@ -1,6 +1,13 @@
 
 # This is a comment.
 
+struct Test {
+  foo: bool;
+  bar: int;
+  baz: float;
+  bazz: string;
+}
+
 fn print(x: int) {
   
 }

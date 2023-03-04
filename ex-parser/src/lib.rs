@@ -51,17 +51,32 @@ fn parse_ast_toplevel(
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<ASTTopLevel, ()> {
     if parser.first().is_keyword(*crate::KEYWORD_FN) {
-        let function = parse_function(id_alloc, parser, file, diagnostics)?;
+        let item = parse_function(id_alloc, parser, file, diagnostics)?;
         Ok(ASTTopLevel {
             id: id_alloc.allocate(),
-            span: function.span,
-            kind: ASTTopLevelKind::Function(function),
+            span: item.span,
+            kind: ASTTopLevelKind::Function(item),
+        })
+    } else if parser.first().is_keyword(*crate::KEYWORD_STRUCT) {
+        let item = parse_struct(id_alloc, parser, file, diagnostics)?;
+        Ok(ASTTopLevel {
+            id: id_alloc.allocate(),
+            span: item.span,
+            kind: ASTTopLevelKind::Struct(item),
         })
     } else {
-        unexpected_token(parser.first(), &[*crate::KEYWORD_FN], file, diagnostics);
+        unexpected_token(
+            parser.first(),
+            &[*crate::KEYWORD_FN, *crate::KEYWORD_STRUCT],
+            file,
+            diagnostics,
+        );
 
         // Skip to next top level.
-        while parser.is_exists() && !parser.first().is_keyword(*crate::KEYWORD_FN) {
+        while parser.is_exists()
+            && !parser.first().is_keyword(*crate::KEYWORD_FN)
+            && !parser.first().is_keyword(*crate::KEYWORD_STRUCT)
+        {
             parser.consume();
         }
 
@@ -230,6 +245,112 @@ fn parse_function_return_type(
         typename,
         span,
     })
+}
+
+fn parse_struct(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTStruct, ()> {
+    let keyword_struct = if let Some(id) = parser.first().keyword(*crate::KEYWORD_STRUCT) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::KEYWORD_STRUCT], file, diagnostics);
+        return Err(());
+    };
+
+    let struct_name = if let Some(id) = parser.first().id() {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
+        return Err(());
+    };
+
+    let brace_open = if let Some(id) = parser.first().kind(TokenKind::OpenBrace) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::OPEN_PAREN], file, diagnostics);
+        return Err(());
+    };
+
+    let fields = parse_struct_fields(id_alloc, parser, file, diagnostics)?;
+
+    let brace_close = if let Some(id) = parser.first().kind(TokenKind::CloseBrace) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(
+            parser.first(),
+            &[*crate::COMMA, *crate::CLOSE_PAREN],
+            file,
+            diagnostics,
+        );
+        return Err(());
+    };
+
+    let span = keyword_struct.span.to(brace_close.span);
+
+    Ok(ASTStruct {
+        keyword_struct,
+        name: struct_name,
+        brace_open,
+        fields,
+        brace_close,
+        span,
+    })
+}
+
+fn parse_struct_fields(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<Vec<ASTStructField>, ()> {
+    let mut fields = Vec::new();
+
+    while parser.is_exists() && !parser.first().is_kind(TokenKind::CloseBrace) {
+        let field_name = if let Some(id) = parser.first().id() {
+            parser.consume();
+            id
+        } else {
+            unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
+            return Err(());
+        };
+
+        let colon = if let Some(id) = parser.first().kind(TokenKind::Colon) {
+            parser.consume();
+            id
+        } else {
+            unexpected_token(parser.first(), &[*crate::COLON], file, diagnostics);
+            return Err(());
+        };
+
+        let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
+
+        let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
+            parser.consume();
+            id
+        } else {
+            unexpected_token(parser.first(), &[*crate::SEMICOLON], file, diagnostics);
+            return Err(());
+        };
+
+        let span = field_name.span.to(semicolon.span);
+
+        fields.push(ASTStructField {
+            name: field_name,
+            colon,
+            typename,
+            semicolon,
+            span,
+        })
+    }
+
+    Ok(fields)
 }
 
 fn parse_statement(

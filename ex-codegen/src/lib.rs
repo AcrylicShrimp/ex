@@ -83,6 +83,7 @@ pub fn codegen(
                 );
                 program.functions.insert(function.name, function);
             }
+            ASTTopLevelKind::Struct(..) => {}
         }
     }
 

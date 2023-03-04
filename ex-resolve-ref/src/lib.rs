@@ -103,6 +103,7 @@ pub fn resolve_ast(
 
                 functions.push(ast);
             }
+            ASTTopLevelKind::Struct(..) => {}
         }
     }
 

@@ -73,12 +73,32 @@ pub struct ASTTopLevel {
 #[derive(Debug, Clone, Hash)]
 pub enum ASTTopLevelKind {
     Function(ASTFunction),
+    Struct(ASTStruct),
 }
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTFunction {
     pub signature: ASTFunctionSignature,
     pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTStruct {
+    pub keyword_struct: Id,
+    pub name: Id,
+    pub brace_open: Id,
+    pub fields: Vec<ASTStructField>,
+    pub brace_close: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTStructField {
+    pub name: Id,
+    pub colon: Id,
+    pub typename: Typename,
+    pub semicolon: Id,
     pub span: Span,
 }
 

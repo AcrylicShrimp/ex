@@ -61,6 +61,7 @@ lazy_static! {
 
 lazy_static! {
     pub static ref KEYWORD_FN: Symbol = Symbol::from_str("fn");
+    pub static ref KEYWORD_STRUCT: Symbol = Symbol::from_str("struct");
     pub static ref KEYWORD_LET: Symbol = Symbol::from_str("let");
     pub static ref KEYWORD_IF: Symbol = Symbol::from_str("if");
     pub static ref KEYWORD_ELSE: Symbol = Symbol::from_str("else");

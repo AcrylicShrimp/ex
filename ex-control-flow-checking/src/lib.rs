@@ -39,6 +39,7 @@ pub fn check_control_flow(
                 );
                 function_cfg.validate(function, file, diagnostics);
             }
+            ASTTopLevelKind::Struct(..) => {}
         }
     }
 }

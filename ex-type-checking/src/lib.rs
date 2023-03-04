@@ -36,6 +36,7 @@ pub fn check_types(
                     diagnostics,
                 );
             }
+            ASTTopLevelKind::Struct(..) => {}
         }
     }
 }
@@ -505,6 +506,7 @@ pub fn propagate_type_variables(
                     diagnostics,
                 );
             }
+            ASTTopLevelKind::Struct(..) => {}
         }
     }
 
