@@ -234,11 +234,11 @@ pub enum ASTAssignmentOperatorKind {
     Div,
     Mod,
     Pow,
+    Shl,
+    Shr,
     BitOr,
     BitAnd,
     BitXor,
-    Shl,
-    Shr,
     BitNot,
 }
 

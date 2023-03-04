@@ -3,8 +3,8 @@ mod value;
 pub use value::*;
 
 use ex_codegen::{
-    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Program, TemporaryId,
-    TypeKind, UnaryOperator, VariableId,
+    AssignmentOperator, BinaryOperator, Expression, ExpressionKind, Function, InstructionKind,
+    Program, TemporaryId, TypeKind, UnaryOperator, VariableId,
 };
 use ex_symbol::Symbol;
 use std::collections::HashMap;
@@ -51,9 +51,138 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
                 InstructionKind::Store {
                     variable,
                     temporary,
+                    operator,
                 } => {
                     let temporary = &temp_stack[temporary];
-                    stack.insert(*variable, temporary.clone());
+                    let temporary = match operator {
+                        Some(operator) => {
+                            let variable = &stack[variable];
+                            match (operator, variable, temporary) {
+                                (
+                                    AssignmentOperator::Add,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left + *right),
+                                (
+                                    AssignmentOperator::Add,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(*left + *right),
+                                (
+                                    AssignmentOperator::Add,
+                                    Value::String(left),
+                                    Value::String(right),
+                                ) => Value::String(format!("{}{}", left, right)),
+                                (
+                                    AssignmentOperator::Sub,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left - *right),
+                                (
+                                    AssignmentOperator::Sub,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(*left - *right),
+                                (
+                                    AssignmentOperator::Mul,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left * *right),
+                                (
+                                    AssignmentOperator::Mul,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(*left * *right),
+                                (
+                                    AssignmentOperator::Mul,
+                                    Value::String(left),
+                                    Value::Integer(right),
+                                ) => Value::String(left.repeat(*right as usize)),
+                                (
+                                    AssignmentOperator::Mul,
+                                    Value::Integer(left),
+                                    Value::String(right),
+                                ) => Value::String(right.repeat(*left as usize)),
+                                (
+                                    AssignmentOperator::Div,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left / *right),
+                                (
+                                    AssignmentOperator::Div,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(*left / *right),
+                                (
+                                    AssignmentOperator::Mod,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left % *right),
+                                (
+                                    AssignmentOperator::Mod,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(*left % *right),
+                                (
+                                    AssignmentOperator::Pow,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(left.pow(*right as u32)),
+                                (
+                                    AssignmentOperator::Pow,
+                                    Value::Float(left),
+                                    Value::Float(right),
+                                ) => Value::Float(left.powf(*right)),
+                                (
+                                    AssignmentOperator::Shl,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left << *right),
+                                (
+                                    AssignmentOperator::Shr,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left >> *right),
+                                (
+                                    AssignmentOperator::BitOr,
+                                    Value::Boolean(left),
+                                    Value::Boolean(right),
+                                ) => Value::Boolean(*left || *right),
+                                (
+                                    AssignmentOperator::BitOr,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left | *right),
+                                (
+                                    AssignmentOperator::BitAnd,
+                                    Value::Boolean(left),
+                                    Value::Boolean(right),
+                                ) => Value::Boolean(*left && *right),
+                                (
+                                    AssignmentOperator::BitAnd,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left & *right),
+                                (
+                                    AssignmentOperator::BitXor,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left ^ *right),
+                                (AssignmentOperator::BitNot, _, Value::Boolean(right)) => {
+                                    Value::Boolean(!*right)
+                                }
+                                (
+                                    AssignmentOperator::BitNot,
+                                    Value::Integer(left),
+                                    Value::Integer(right),
+                                ) => Value::Integer(*left & *right),
+                                _ => unreachable!(),
+                            }
+                        }
+                        None => temporary.clone(),
+                    };
+
+                    stack.insert(*variable, temporary);
                 }
                 InstructionKind::Assign {
                     temporary,

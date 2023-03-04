@@ -82,42 +82,37 @@ impl BuiltInAssignmentOperator {
                     TypeKind::float(),
                 ),
                 (
-                    ASTAssignmentOperatorKind::BitOr,
-                    TypeKind::boolean(),
-                    TypeKind::boolean(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitOr,
-                    TypeKind::integer(),
-                    TypeKind::integer(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitAnd,
-                    TypeKind::boolean(),
-                    TypeKind::boolean(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitAnd,
-                    TypeKind::integer(),
-                    TypeKind::integer(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitXor,
-                    TypeKind::boolean(),
-                    TypeKind::boolean(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitXor,
-                    TypeKind::integer(),
-                    TypeKind::integer(),
-                ),
-                (
                     ASTAssignmentOperatorKind::Shl,
                     TypeKind::integer(),
                     TypeKind::integer(),
                 ),
                 (
                     ASTAssignmentOperatorKind::Shr,
+                    TypeKind::integer(),
+                    TypeKind::integer(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitOr,
+                    TypeKind::boolean(),
+                    TypeKind::boolean(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitOr,
+                    TypeKind::integer(),
+                    TypeKind::integer(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitAnd,
+                    TypeKind::boolean(),
+                    TypeKind::boolean(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitAnd,
+                    TypeKind::integer(),
+                    TypeKind::integer(),
+                ),
+                (
+                    ASTAssignmentOperatorKind::BitXor,
                     TypeKind::integer(),
                     TypeKind::integer(),
                 ),

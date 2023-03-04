@@ -47,8 +47,9 @@ pub use variable_id_allocator::*;
 pub use variable_table::*;
 
 use ex_parser::{
-    ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTLoop,
-    ASTProgram, ASTStatementKind, ASTTopLevelKind, ASTUnaryOperatorKind, NodeId, Typename,
+    ASTAssignmentOperatorKind, ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind,
+    ASTFunction, ASTIf, ASTLoop, ASTProgram, ASTStatementKind, ASTTopLevelKind,
+    ASTUnaryOperatorKind, NodeId, Typename,
 };
 use ex_resolve_ref::{
     AssignmentLhsKind, AssignmentLhsTable, Function as NodeFunction, FunctionTable, SymbolNodeKind,
@@ -199,10 +200,7 @@ fn codegen_function_stmt_block(
                         type_reference_table,
                         symbol_reference_table,
                     );
-                    block.new_instruction(InstructionKind::Store {
-                        variable,
-                        temporary,
-                    });
+                    block.new_instruction(InstructionKind::store(variable, temporary, None));
                 }
             }
             ASTStatementKind::If(stmt_if) => {
@@ -291,10 +289,11 @@ fn codegen_function_stmt_block(
                         type_reference_table,
                         symbol_reference_table,
                     );
-                    block.new_instruction(InstructionKind::Store {
+                    block.new_instruction(InstructionKind::store(
                         variable,
                         temporary,
-                    });
+                        stmt_assignment.operator_kind.map(convert_assignment_op),
+                    ));
                 }
             }
             ASTStatementKind::Row(stmt_row) => {
@@ -726,6 +725,23 @@ fn codegen_function_expression(
                 }
             }
         }
+    }
+}
+
+fn convert_assignment_op(op: ASTAssignmentOperatorKind) -> AssignmentOperator {
+    match op {
+        ASTAssignmentOperatorKind::Add => AssignmentOperator::Add,
+        ASTAssignmentOperatorKind::Sub => AssignmentOperator::Sub,
+        ASTAssignmentOperatorKind::Mul => AssignmentOperator::Mul,
+        ASTAssignmentOperatorKind::Div => AssignmentOperator::Div,
+        ASTAssignmentOperatorKind::Mod => AssignmentOperator::Mod,
+        ASTAssignmentOperatorKind::Pow => AssignmentOperator::Pow,
+        ASTAssignmentOperatorKind::Shl => AssignmentOperator::Shl,
+        ASTAssignmentOperatorKind::Shr => AssignmentOperator::Shr,
+        ASTAssignmentOperatorKind::BitOr => AssignmentOperator::BitOr,
+        ASTAssignmentOperatorKind::BitAnd => AssignmentOperator::BitAnd,
+        ASTAssignmentOperatorKind::BitXor => AssignmentOperator::BitXor,
+        ASTAssignmentOperatorKind::BitNot => AssignmentOperator::BitNot,
     }
 }
 

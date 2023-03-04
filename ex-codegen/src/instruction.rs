@@ -17,6 +17,7 @@ pub enum InstructionKind {
     Store {
         variable: VariableId,
         temporary: TemporaryId,
+        operator: Option<AssignmentOperator>,
     },
     Assign {
         temporary: TemporaryId,
@@ -39,10 +40,15 @@ pub enum InstructionKind {
 }
 
 impl InstructionKind {
-    pub fn store(variable: VariableId, temporary: TemporaryId) -> Self {
+    pub fn store(
+        variable: VariableId,
+        temporary: TemporaryId,
+        operator: Option<AssignmentOperator>,
+    ) -> Self {
         Self::Store {
             variable,
             temporary,
+            operator,
         }
     }
 
@@ -76,4 +82,20 @@ impl InstructionKind {
     pub fn terminate(temporary: Option<TemporaryId>) -> Self {
         Self::Terminate { temporary }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AssignmentOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Pow,
+    Shl,
+    Shr,
+    BitOr,
+    BitAnd,
+    BitXor,
+    BitNot,
 }
