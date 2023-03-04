@@ -26,10 +26,9 @@ pub fn check_control_flow(
     diagnostics: &Sender<Diagnostics>,
 ) {
     for top_level in &ast.top_levels {
-        let function = function_table.functions.get(&top_level.id).unwrap();
-
         match &top_level.kind {
             ASTTopLevelKind::Function(ast_function) => {
+                let function = function_table.functions.get(&top_level.id).unwrap();
                 let function_cfg = build_function_cfg(
                     assignment_lhs_table,
                     symbol_reference_table,
