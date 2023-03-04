@@ -6,11 +6,20 @@ struct Test {
   bar: int;
   baz: float;
   bazz: string;
-  test: Test;
+  # t2: Test2;
 }
 
+# struct Test2 {
+#   t1: Test;
+# }
+
 # fn foo() -> Test {
-#   
+#   Test {
+#     foo: false,
+#     bar: 0,
+#     baz: float,
+#     bazz: "",
+#   }
 # }
 
 fn print(x: int) {

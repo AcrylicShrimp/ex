@@ -19,12 +19,12 @@ pub use user_type_table::*;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
 use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTProgram, ASTStatementKind,
-    ASTStruct, ASTTopLevelKind, Typename, TypenameKind,
+    ASTStruct, ASTTopLevelKind, NodeId, Typename, TypenameKind,
 };
 use ex_span::{SourceFile, Span};
 use ex_symbol::Symbol;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::{mpsc::Sender, Arc},
 };
 
@@ -152,6 +152,7 @@ pub fn resolve_ast(
                         .iter()
                         .map(|field| field.typename.clone())
                         .collect(),
+                    ast.fields.iter().map(|field| field.span).collect(),
                     ast.span,
                 );
 
@@ -211,6 +212,13 @@ pub fn resolve_ast(
             diagnostics,
         );
     }
+
+    check_user_type_struct_circular_dependencies(
+        &type_reference_table,
+        &user_type_table,
+        file,
+        diagnostics,
+    );
 
     (
         function_table,
@@ -289,6 +297,95 @@ fn check_user_type_struct_duplicated_fields(
             Entry::Vacant(entry) => {
                 entry.insert(field.span);
             }
+        }
+    }
+}
+
+fn check_user_type_struct_circular_dependencies(
+    type_reference_table: &TypeReferenceTable,
+    user_type_table: &UserTypeTable,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    let mut dependencies = HashMap::<NodeId, Vec<(NodeId, Span)>>::new();
+    let mut handled = HashSet::<(NodeId, NodeId)>::new();
+
+    for (id, user_type) in &user_type_table.user_types {
+        #[allow(irrefutable_let_patterns)]
+        let user_type_struct = if let UserTypeKind::Struct(user_type_struct) = user_type {
+            user_type_struct
+        } else {
+            continue;
+        };
+
+        for (index, typename) in user_type_struct.fields_typenames.iter().enumerate() {
+            let symbol = if let TypeKind::UserTypeStruct { symbol } =
+                &type_reference_table.references[&typename.id].kind
+            {
+                symbol
+            } else {
+                continue;
+            };
+            let user_type_id = user_type_table.user_type_symbols[symbol];
+            dependencies
+                .entry(user_type_id)
+                .or_default()
+                .push((*id, user_type_struct.fields_spans[index]));
+            handled.insert((*id, user_type_id));
+        }
+    }
+
+    for (id, dependencies) in &mut dependencies {
+        let mut added_dependencies = Vec::new();
+
+        for (dep_id, _) in dependencies.iter() {
+            let user_type_struct = user_type_table.user_types[dep_id].as_struct();
+
+            for (index, typename) in user_type_struct.fields_typenames.iter().enumerate() {
+                let symbol = if let TypeKind::UserTypeStruct { symbol } =
+                    &type_reference_table.references[&typename.id].kind
+                {
+                    symbol
+                } else {
+                    continue;
+                };
+                let user_type_id = user_type_table.user_type_symbols[symbol];
+
+                if handled.contains(&(*id, user_type_id)) {
+                    continue;
+                }
+
+                added_dependencies.push((*id, user_type_struct.fields_spans[index]));
+                handled.insert((*id, user_type_id));
+            }
+        }
+
+        dependencies.extend(added_dependencies);
+    }
+
+    for (id, dependencies) in &dependencies {
+        if let Some((_, dep_span)) = dependencies.iter().find(|(dep_id, _)| id == dep_id) {
+            diagnostics
+                .send(Diagnostics {
+                    level: DiagnosticsLevel::Error,
+                    message: format!(
+                        "struct {} has circular dependency",
+                        user_type_table.user_types[id].as_struct().name.symbol,
+                    ),
+                    origin: Some(DiagnosticsOrigin {
+                        file: file.clone(),
+                        span: user_type_table.user_types[id].as_struct().span,
+                    }),
+                    sub_diagnostics: vec![SubDiagnostics {
+                        level: DiagnosticsLevel::Hint,
+                        message: format!("dependency here"),
+                        origin: Some(DiagnosticsOrigin {
+                            file: file.clone(),
+                            span: *dep_span,
+                        }),
+                    }],
+                })
+                .unwrap();
         }
     }
 }
