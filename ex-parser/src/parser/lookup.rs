@@ -32,6 +32,10 @@ impl Lookup {
             .unwrap_or_default()
     }
 
+    pub fn is_id(&self) -> bool {
+        self.id().is_some()
+    }
+
     pub fn kind(&self, kind: TokenKind) -> Option<Id> {
         self.token.as_ref().and_then(|token| {
             if token.kind == kind {

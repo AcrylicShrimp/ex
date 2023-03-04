@@ -620,6 +620,11 @@ fn resolve_scopes_expression(
         ASTExpressionKind::IdReference(expr_id_ref) => {
             scope_table.nodes.insert(expr_id_ref.id, scope);
         }
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            for field in &expr_struct_literal.fields {
+                resolve_scopes_expression(scope, scope_table, &field.expression, file, diagnostics);
+            }
+        }
     }
 }
 
@@ -912,6 +917,18 @@ fn resolve_symbol_references_expression(
                 })
                 .unwrap();
         }
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            for field in &expr_struct_literal.fields {
+                resolve_symbol_references_expression(
+                    symbol_reference_table,
+                    scope_table,
+                    function_table,
+                    &field.expression,
+                    file,
+                    diagnostics,
+                );
+            }
+        }
     }
 }
 
@@ -1179,6 +1196,44 @@ fn resolve_type_references_expression(
         }
         ASTExpressionKind::Literal(..) => {}
         ASTExpressionKind::IdReference(..) => {}
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            resolve_type_reference(
+                type_reference_table,
+                user_type_table,
+                &expr_struct_literal.typename,
+                file,
+                diagnostics,
+            );
+
+            if let Some(type_reference) = type_reference_table
+                .references
+                .get(&expr_struct_literal.typename.id)
+            {
+                if !type_reference.kind.is_unknown() && !type_reference.kind.is_user_type_struct() {
+                    diagnostics
+                        .send(Diagnostics {
+                            level: DiagnosticsLevel::Error,
+                            message: format!("expected struct type, found {}", type_reference.kind),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: expr_struct_literal.typename.span,
+                            }),
+                            sub_diagnostics: vec![],
+                        })
+                        .unwrap();
+                }
+            }
+
+            for field in &expr_struct_literal.fields {
+                resolve_type_references_expression(
+                    type_reference_table,
+                    user_type_table,
+                    &field.expression,
+                    file,
+                    diagnostics,
+                );
+            }
+        }
     }
 }
 

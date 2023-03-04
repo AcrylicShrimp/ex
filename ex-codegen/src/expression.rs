@@ -37,6 +37,10 @@ pub enum ExpressionKind {
     Literal {
         literal: TokenLiteral,
     },
+    StructLiteral {
+        struct_type: TypeId,
+        fields: Vec<TemporaryId>,
+    },
     Variable {
         variable: VariableId,
     },
@@ -49,10 +53,6 @@ pub enum ExpressionKind {
 }
 
 impl ExpressionKind {
-    // pub fn phi(arguments: Vec<(BlockId, TemporaryId)>) -> Self {
-    //     Self::Phi { arguments }
-    // }
-
     pub fn binary(operator: BinaryOperator, left: TemporaryId, right: TemporaryId) -> Self {
         Self::Binary {
             operator,
@@ -82,6 +82,13 @@ impl ExpressionKind {
 
     pub fn literal(literal: TokenLiteral) -> Self {
         Self::Literal { literal }
+    }
+
+    pub fn struct_literal(struct_type: TypeId, fields: Vec<TemporaryId>) -> Self {
+        Self::StructLiteral {
+            struct_type,
+            fields,
+        }
     }
 
     pub fn variable(variable: VariableId) -> Self {

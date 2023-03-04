@@ -525,5 +525,6 @@ fn check_variable_usage(
                 }
             }
         }
+        ASTExpressionKind::StructLiteral(..) => {}
     }
 }

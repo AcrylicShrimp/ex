@@ -1,6 +1,6 @@
-use std::fmt::Display;
-
+use ex_codegen::TypeId;
 use ex_symbol::Symbol;
+use std::fmt::Display;
 
 #[derive(Debug, Clone)]
 pub enum Value {
@@ -10,6 +10,7 @@ pub enum Value {
     Float(f64),
     String(String),
     Callable(Symbol),
+    Struct(TypeId, Vec<Value>),
 }
 
 impl Value {
@@ -47,6 +48,13 @@ impl Value {
             _ => unreachable!(),
         }
     }
+
+    pub fn as_struct(&self) -> (TypeId, &Vec<Value>) {
+        match self {
+            Value::Struct(type_id, fields) => (*type_id, &fields),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl Display for Value {
@@ -58,6 +66,16 @@ impl Display for Value {
             Value::Float(value) => write!(f, "{}", value),
             Value::String(value) => write!(f, "{}", value),
             Value::Callable(value) => write!(f, "{}", value),
+            Value::Struct(_, values) => {
+                write!(f, "(")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", value)?;
+                }
+                write!(f, ")")
+            }
         }
     }
 }

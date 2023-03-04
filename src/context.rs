@@ -35,11 +35,10 @@ impl Context {
 
         let type_table_builder = propagate_type_variables(
             &function_table,
+            &user_type_table,
             &symbol_reference_table,
             &type_reference_table,
             &ast,
-            &file,
-            &diagnostics,
         );
 
         let type_table = type_table_builder.resolve();
@@ -47,6 +46,7 @@ impl Context {
         check_types(
             &type_table,
             &type_reference_table,
+            &user_type_table,
             &ast,
             &file,
             &diagnostics,

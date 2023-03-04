@@ -298,9 +298,10 @@ pub enum ASTExpressionKind {
     Unary(ASTUnaryExpression),
     As(ASTAsExpression),
     Call(ASTCallExpression),
-    Paren(ASTParenExpression),   // single
-    Literal(Literal),            // single
-    IdReference(ASTIdReference), // single
+    Paren(ASTParenExpression),       // single
+    Literal(Literal),                // single
+    IdReference(ASTIdReference),     // single
+    StructLiteral(ASTStructLiteral), // single
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -387,5 +388,23 @@ pub struct ASTParenExpression {
 pub struct ASTIdReference {
     pub id: NodeId,
     pub reference: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTStructLiteral {
+    pub typename: Typename,
+    pub brace_open: Id,
+    pub fields: Vec<ASTStructLiteralField>,
+    pub brace_close: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTStructLiteralField {
+    pub name: Id,
+    pub colon: Id,
+    pub expression: ASTExpression,
+    pub comma: Option<Id>,
     pub span: Span,
 }

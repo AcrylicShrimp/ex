@@ -485,6 +485,16 @@ fn eval_expression(
                 _ => unreachable!(),
             }
         }
+        ExpressionKind::StructLiteral {
+            struct_type,
+            fields,
+        } => {
+            let fields = fields
+                .iter()
+                .map(|field| temp_stack[field].clone())
+                .collect();
+            Value::Struct(*struct_type, fields)
+        }
         ExpressionKind::Variable { variable } => stack[variable].clone(),
         ExpressionKind::Function { function } => Value::Callable(function.clone()),
         ExpressionKind::Temporary { temporary } => temp_stack[temporary].clone(),

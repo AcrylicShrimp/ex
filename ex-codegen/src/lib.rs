@@ -798,6 +798,33 @@ fn codegen_function_expression(
                 }
             }
         }
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            let type_id =
+                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
+            let fields = expr_struct_literal
+                .fields
+                .iter()
+                .map(|field| {
+                    codegen_function_expression(
+                        block,
+                        node_variable_table,
+                        type_table,
+                        function,
+                        &field.expression,
+                        node_function,
+                        node_type_table,
+                        type_reference_table,
+                        symbol_reference_table,
+                    )
+                })
+                .collect();
+            let temporary = block.new_temporary(type_id);
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(ExpressionKind::struct_literal(type_id, fields), type_id),
+            ));
+            temporary
+        }
     }
 }
 

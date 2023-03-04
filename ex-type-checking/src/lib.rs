@@ -13,13 +13,18 @@ use ex_parser::{
 };
 use ex_resolve_ref::{
     FunctionTable, SymbolNodeKind, SymbolReferenceTable, TypeKind, TypeReferenceTable,
+    UserTypeKind, UserTypeTable,
 };
 use ex_span::SourceFile;
-use std::sync::{mpsc::Sender, Arc};
+use std::{
+    collections::HashSet,
+    sync::{mpsc::Sender, Arc},
+};
 
 pub fn check_types(
     type_table: &TypeTable,
     type_reference_table: &TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast: &ASTProgram,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
@@ -30,6 +35,7 @@ pub fn check_types(
                 check_types_stmt_block(
                     type_table,
                     type_reference_table,
+                    user_type_table,
                     ast,
                     &ast.body_block,
                     file,
@@ -44,6 +50,7 @@ pub fn check_types(
 pub fn check_types_stmt_block(
     type_table: &TypeTable,
     type_reference_table: &TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast_function: &ASTFunction,
     ast: &ASTBlock,
     file: &Arc<SourceFile>,
@@ -55,6 +62,7 @@ pub fn check_types_stmt_block(
                 check_types_stmt_block(
                     type_table,
                     type_reference_table,
+                    user_type_table,
                     ast_function,
                     &stmt_block,
                     file,
@@ -87,6 +95,8 @@ pub fn check_types_stmt_block(
                 if let Some(let_assignment) = &stmt_let.let_assignment {
                     check_types_expression(
                         type_table,
+                        type_reference_table,
+                        user_type_table,
                         &let_assignment.expression,
                         file,
                         diagnostics,
@@ -115,7 +125,14 @@ pub fn check_types_stmt_block(
                 }
             }
             ASTStatementKind::If(stmt_if) => {
-                check_types_expression(type_table, &stmt_if.expression, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &stmt_if.expression,
+                    file,
+                    diagnostics,
+                );
 
                 if let Some(expression_type_kind) = type_table.types.get(&stmt_if.expression.id) {
                     if !expression_type_kind.is_boolean() {
@@ -140,6 +157,7 @@ pub fn check_types_stmt_block(
                 check_types_stmt_block(
                     type_table,
                     type_reference_table,
+                    user_type_table,
                     ast_function,
                     &stmt_if.body_block,
                     file,
@@ -149,6 +167,8 @@ pub fn check_types_stmt_block(
                 for single_else_if in &stmt_if.single_else_ifs {
                     check_types_expression(
                         type_table,
+                        type_reference_table,
+                        user_type_table,
                         &single_else_if.expression,
                         file,
                         diagnostics,
@@ -179,6 +199,7 @@ pub fn check_types_stmt_block(
                     check_types_stmt_block(
                         type_table,
                         type_reference_table,
+                        user_type_table,
                         ast_function,
                         &single_else_if.body_block,
                         file,
@@ -190,6 +211,7 @@ pub fn check_types_stmt_block(
                     check_types_stmt_block(
                         type_table,
                         type_reference_table,
+                        user_type_table,
                         ast_function,
                         &single_else.body_block,
                         file,
@@ -201,6 +223,7 @@ pub fn check_types_stmt_block(
                 check_types_stmt_block(
                     type_table,
                     type_reference_table,
+                    user_type_table,
                     ast_function,
                     &stmt_loop.body_block,
                     file,
@@ -208,7 +231,14 @@ pub fn check_types_stmt_block(
                 );
             }
             ASTStatementKind::While(stmt_while) => {
-                check_types_expression(type_table, &stmt_while.expression, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &stmt_while.expression,
+                    file,
+                    diagnostics,
+                );
 
                 if let Some(expression_type_kind) = type_table.types.get(&stmt_while.expression.id)
                 {
@@ -234,6 +264,7 @@ pub fn check_types_stmt_block(
                 check_types_stmt_block(
                     type_table,
                     type_reference_table,
+                    user_type_table,
                     ast_function,
                     &stmt_while.body_block,
                     file,
@@ -244,7 +275,14 @@ pub fn check_types_stmt_block(
             ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
                 if let Some(expression) = &stmt_return.expression {
-                    check_types_expression(type_table, &expression, file, diagnostics);
+                    check_types_expression(
+                        type_table,
+                        type_reference_table,
+                        user_type_table,
+                        &expression,
+                        file,
+                        diagnostics,
+                    );
                 }
 
                 let function_return_type_reference = ast_function
@@ -335,11 +373,20 @@ pub fn check_types_stmt_block(
             ASTStatementKind::Assignment(stmt_assignment) => {
                 check_types_expression(
                     type_table,
+                    type_reference_table,
+                    user_type_table,
                     &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );
-                check_types_expression(type_table, &stmt_assignment.right, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &stmt_assignment.right,
+                    file,
+                    diagnostics,
+                );
 
                 match (
                     type_table.types.get(&stmt_assignment.left.expression.id),
@@ -367,7 +414,14 @@ pub fn check_types_stmt_block(
                 }
             }
             ASTStatementKind::Row(stmt_row) => {
-                check_types_expression(type_table, &stmt_row.expression, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &stmt_row.expression,
+                    file,
+                    diagnostics,
+                );
             }
         }
     }
@@ -375,24 +429,70 @@ pub fn check_types_stmt_block(
 
 pub fn check_types_expression(
     type_table: &TypeTable,
+    type_reference_table: &TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast: &ASTExpression,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
     match &ast.kind {
         ASTExpressionKind::Binary(expr_binary) => {
-            check_types_expression(type_table, &expr_binary.left, file, diagnostics);
-            check_types_expression(type_table, &expr_binary.right, file, diagnostics);
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_binary.left,
+                file,
+                diagnostics,
+            );
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_binary.right,
+                file,
+                diagnostics,
+            );
         }
         ASTExpressionKind::Unary(expr_unary) => {
-            check_types_expression(type_table, &expr_unary.right, file, diagnostics);
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_unary.right,
+                file,
+                diagnostics,
+            );
         }
         ASTExpressionKind::As(expr_as) => {
-            check_types_expression(type_table, &expr_as.expression, file, diagnostics);
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_as.expression,
+                file,
+                diagnostics,
+            );
         }
         ASTExpressionKind::Call(expr_call) => {
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_call.expression,
+                file,
+                diagnostics,
+            );
+
             for argument in &expr_call.arguments {
-                check_types_expression(type_table, &argument.expression, file, diagnostics);
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &argument.expression,
+                    file,
+                    diagnostics,
+                );
             }
 
             if let Some(callee_type_kind) = type_table.types.get(&expr_call.expression.id) {
@@ -461,10 +561,124 @@ pub fn check_types_expression(
             }
         }
         ASTExpressionKind::Paren(expr_paren) => {
-            check_types_expression(type_table, &expr_paren.expression, file, diagnostics);
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_paren.expression,
+                file,
+                diagnostics,
+            );
         }
         ASTExpressionKind::Literal(..) => {}
         ASTExpressionKind::IdReference(..) => {}
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            for field in &expr_struct_literal.fields {
+                check_types_expression(
+                    type_table,
+                    type_reference_table,
+                    user_type_table,
+                    &field.expression,
+                    file,
+                    diagnostics,
+                );
+            }
+
+            if let Some(type_reference) = type_reference_table
+                .references
+                .get(&expr_struct_literal.typename.id)
+            {
+                if let TypeKind::UserTypeStruct { symbol } = &type_reference.kind {
+                    if let Some(user_type) = user_type_table.lookup(*symbol) {
+                        #[allow(irrefutable_let_patterns)]
+                        if let UserTypeKind::Struct(user_type_struct) = user_type {
+                            let mut handled_fields = HashSet::new();
+
+                            for field in &expr_struct_literal.fields {
+                                if let Some(field_type_kind) =
+                                    type_table.types.get(&field.expression.id)
+                                {
+                                    handled_fields.insert(field.name.symbol);
+
+                                    if let Some(index) =
+                                        user_type_struct.fields.iter().position(|field_name| {
+                                            field.name.symbol == field_name.symbol
+                                        })
+                                    {
+                                        if let Some(type_reference) = type_reference_table
+                                            .references
+                                            .get(&user_type_struct.fields_typenames[index].id)
+                                        {
+                                            if !field_type_kind.eq(&type_reference.kind) {
+                                                diagnostics
+                                                    .send(Diagnostics {
+                                                        level: DiagnosticsLevel::Error,
+                                                        message: format!(
+                                                            "expected type `{}`, found `{}`",
+                                                            type_reference.kind, field_type_kind
+                                                        ),
+                                                        origin: Some(DiagnosticsOrigin {
+                                                            file: file.clone(),
+                                                            span: field.expression.span,
+                                                        }),
+                                                        sub_diagnostics: vec![],
+                                                    })
+                                                    .unwrap();
+                                            }
+                                        }
+                                    } else {
+                                        diagnostics
+                                            .send(Diagnostics {
+                                                level: DiagnosticsLevel::Error,
+                                                message: format!(
+                                                    "could not find field {}",
+                                                    field.name.symbol
+                                                ),
+                                                origin: Some(DiagnosticsOrigin {
+                                                    file: file.clone(),
+                                                    span: field.name.span,
+                                                }),
+                                                sub_diagnostics: vec![SubDiagnostics {
+                                                    level: DiagnosticsLevel::Hint,
+                                                    message: format!("struct defined here"),
+                                                    origin: Some(DiagnosticsOrigin {
+                                                        file: file.clone(),
+                                                        span: user_type_struct.span,
+                                                    }),
+                                                }],
+                                            })
+                                            .unwrap();
+                                    }
+                                }
+                            }
+
+                            for (index, field_name) in user_type_struct.fields.iter().enumerate() {
+                                if !handled_fields.contains(&field_name.symbol) {
+                                    diagnostics
+                                        .send(Diagnostics {
+                                            level: DiagnosticsLevel::Error,
+                                            message: format!("missing field {}", field_name.symbol),
+                                            origin: Some(DiagnosticsOrigin {
+                                                file: file.clone(),
+                                                span: expr_struct_literal.span,
+                                            }),
+                                            sub_diagnostics: vec![SubDiagnostics {
+                                                level: DiagnosticsLevel::Hint,
+                                                message: format!("struct field defined here"),
+                                                origin: Some(DiagnosticsOrigin {
+                                                    file: file.clone(),
+                                                    span: user_type_struct.fields_spans[index],
+                                                }),
+                                            }],
+                                        })
+                                        .unwrap();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     if !type_table.types.contains_key(&ast.id) {
@@ -484,11 +698,10 @@ pub fn check_types_expression(
 
 pub fn propagate_type_variables(
     function_table: &FunctionTable,
+    user_type_table: &UserTypeTable,
     symbol_reference_table: &SymbolReferenceTable,
     type_reference_table: &TypeReferenceTable,
     ast: &ASTProgram,
-    file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
 ) -> TypeTableBuilder {
     let mut type_table_builder = TypeTableBuilder::new();
 
@@ -498,12 +711,11 @@ pub fn propagate_type_variables(
                 propagate_type_variables_stmt_block(
                     &mut type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     ast,
                     &ast.body_block,
-                    file,
-                    diagnostics,
                 );
             }
             ASTTopLevelKind::Struct(..) => {}
@@ -516,12 +728,11 @@ pub fn propagate_type_variables(
 fn propagate_type_variables_stmt_block(
     type_table_builder: &mut TypeTableBuilder,
     function_table: &FunctionTable,
+    user_type_table: &UserTypeTable,
     symbol_reference_table: &SymbolReferenceTable,
     type_reference_table: &TypeReferenceTable,
     ast_function: &ASTFunction,
     ast: &ASTBlock,
-    file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
 ) {
     for statement in &ast.statements {
         match &statement.kind {
@@ -529,12 +740,11 @@ fn propagate_type_variables_stmt_block(
                 propagate_type_variables_stmt_block(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     ast_function,
                     stmt_block,
-                    file,
-                    diagnostics,
                 );
             }
             ASTStatementKind::Let(stmt_let) => {
@@ -559,11 +769,10 @@ fn propagate_type_variables_stmt_block(
                     let expression_type_var = propagate_type_variables_expression(
                         type_table_builder,
                         function_table,
+                        user_type_table,
                         symbol_reference_table,
                         type_reference_table,
                         &let_assignment.expression,
-                        file,
-                        diagnostics,
                     );
                     type_table_builder
                         .variable_constraints
@@ -577,11 +786,10 @@ fn propagate_type_variables_stmt_block(
                 let type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &stmt_if.expression,
-                    file,
-                    diagnostics,
                 );
                 type_table_builder
                     .variable_constraints
@@ -593,23 +801,21 @@ fn propagate_type_variables_stmt_block(
                 propagate_type_variables_stmt_block(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     ast_function,
                     &stmt_if.body_block,
-                    file,
-                    diagnostics,
                 );
 
                 for single_else_if in &stmt_if.single_else_ifs {
                     let type_var = propagate_type_variables_expression(
                         type_table_builder,
                         function_table,
+                        user_type_table,
                         symbol_reference_table,
                         type_reference_table,
                         &single_else_if.expression,
-                        file,
-                        diagnostics,
                     );
                     type_table_builder
                         .variable_constraints
@@ -621,12 +827,11 @@ fn propagate_type_variables_stmt_block(
                     propagate_type_variables_stmt_block(
                         type_table_builder,
                         function_table,
+                        user_type_table,
                         symbol_reference_table,
                         type_reference_table,
                         ast_function,
                         &single_else_if.body_block,
-                        file,
-                        diagnostics,
                     );
                 }
 
@@ -634,12 +839,11 @@ fn propagate_type_variables_stmt_block(
                     propagate_type_variables_stmt_block(
                         type_table_builder,
                         function_table,
+                        user_type_table,
                         symbol_reference_table,
                         type_reference_table,
                         ast_function,
                         &single_else.body_block,
-                        file,
-                        diagnostics,
                     );
                 }
             }
@@ -647,23 +851,21 @@ fn propagate_type_variables_stmt_block(
                 propagate_type_variables_stmt_block(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     ast_function,
                     &stmt_loop.body_block,
-                    file,
-                    diagnostics,
                 );
             }
             ASTStatementKind::While(stmt_while) => {
                 let type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &stmt_while.expression,
-                    file,
-                    diagnostics,
                 );
                 type_table_builder
                     .variable_constraints
@@ -675,12 +877,11 @@ fn propagate_type_variables_stmt_block(
                 propagate_type_variables_stmt_block(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     ast_function,
                     &stmt_while.body_block,
-                    file,
-                    diagnostics,
                 );
             }
             ASTStatementKind::Break(..) => {}
@@ -690,11 +891,10 @@ fn propagate_type_variables_stmt_block(
                     let type_var = propagate_type_variables_expression(
                         type_table_builder,
                         function_table,
+                        user_type_table,
                         symbol_reference_table,
                         type_reference_table,
                         expression,
-                        file,
-                        diagnostics,
                     );
 
                     let function_return_type_reference = ast_function
@@ -726,20 +926,18 @@ fn propagate_type_variables_stmt_block(
                 let left_type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &stmt_assignment.left.expression,
-                    file,
-                    diagnostics,
                 );
                 let right_type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &stmt_assignment.right,
-                    file,
-                    diagnostics,
                 );
                 type_table_builder
                     .variable_constraints
@@ -752,11 +950,10 @@ fn propagate_type_variables_stmt_block(
                 propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &stmt_row.expression,
-                    file,
-                    diagnostics,
                 );
             }
         }
@@ -766,11 +963,10 @@ fn propagate_type_variables_stmt_block(
 fn propagate_type_variables_expression(
     type_table_builder: &mut TypeTableBuilder,
     function_table: &FunctionTable,
+    user_type_table: &UserTypeTable,
     symbol_reference_table: &SymbolReferenceTable,
     type_reference_table: &TypeReferenceTable,
     ast: &ASTExpression,
-    file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
 ) -> TypeVariable {
     let type_var = type_table_builder.new_variable(ast.id);
 
@@ -779,20 +975,18 @@ fn propagate_type_variables_expression(
             let left_type_var = propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_binary.left,
-                file,
-                diagnostics,
             );
             let right_type_var = propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_binary.right,
-                file,
-                diagnostics,
             );
             type_table_builder
                 .variable_constraints
@@ -809,11 +1003,10 @@ fn propagate_type_variables_expression(
             let right_type_var = propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_unary.right,
-                file,
-                diagnostics,
             );
             type_table_builder
                 .variable_constraints
@@ -839,22 +1032,20 @@ fn propagate_type_variables_expression(
             propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_as.expression,
-                file,
-                diagnostics,
             );
         }
         ASTExpressionKind::Call(expr_call) => {
             let callee_type_var = propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_call.expression,
-                file,
-                diagnostics,
             );
             type_table_builder
                 .variable_constraints
@@ -867,11 +1058,10 @@ fn propagate_type_variables_expression(
                 let argument_type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
+                    user_type_table,
                     symbol_reference_table,
                     type_reference_table,
                     &argument.expression,
-                    file,
-                    diagnostics,
                 );
                 type_table_builder
                     .variable_constraints
@@ -888,11 +1078,10 @@ fn propagate_type_variables_expression(
             let expression_type_var = propagate_type_variables_expression(
                 type_table_builder,
                 function_table,
+                user_type_table,
                 symbol_reference_table,
                 type_reference_table,
                 &expr_paren.expression,
-                file,
-                diagnostics,
             );
             type_table_builder
                 .variable_constraints
@@ -994,6 +1183,57 @@ fn propagate_type_variables_expression(
                     }
                 };
             };
+        }
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            if let Some(type_reference) = type_reference_table
+                .references
+                .get(&expr_struct_literal.typename.id)
+            {
+                type_table_builder
+                    .variable_constraints
+                    .push(TypeVariableConstraint::equal(
+                        type_var,
+                        TypeVariableConstraintOperand::concrete(type_reference.kind.clone()),
+                    ));
+
+                if let TypeKind::UserTypeStruct { symbol } = &type_reference.kind {
+                    if let Some(user_type) = user_type_table.lookup(*symbol) {
+                        #[allow(irrefutable_let_patterns)]
+                        if let UserTypeKind::Struct(user_type_struct) = user_type {
+                            for field in &expr_struct_literal.fields {
+                                let field_type_var = propagate_type_variables_expression(
+                                    type_table_builder,
+                                    function_table,
+                                    user_type_table,
+                                    symbol_reference_table,
+                                    type_reference_table,
+                                    &field.expression,
+                                );
+
+                                if let Some(index) = user_type_struct
+                                    .fields
+                                    .iter()
+                                    .position(|field_name| field.name.symbol == field_name.symbol)
+                                {
+                                    if let Some(type_reference) = type_reference_table
+                                        .references
+                                        .get(&user_type_struct.fields_typenames[index].id)
+                                    {
+                                        type_table_builder.variable_constraints.push(
+                                            TypeVariableConstraint::subtype(
+                                                field_type_var,
+                                                TypeVariableConstraintOperand::concrete(
+                                                    type_reference.kind.clone(),
+                                                ),
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

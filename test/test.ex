@@ -13,14 +13,14 @@ struct Test {
 #   t1: Test;
 # }
 
-# fn foo() -> Test {
-#   Test {
-#     foo: false,
-#     bar: 0,
-#     baz: float,
-#     bazz: "",
-#   }
-# }
+fn foo() -> Test {
+  return Test {
+    foo: false,
+    bar: 0,
+    baz: 0.1,
+    bazz: "test",
+  };
+}
 
 fn print(x: int) {
   
