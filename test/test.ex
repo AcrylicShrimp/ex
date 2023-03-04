@@ -5,11 +5,11 @@ fn print(x: int) {
   
 }
 
-# fn on_event(event: string, cb1: fn(), cb1: fn(string,): string) {
+# fn on_event(event: string, cb1: fn(), cb1: fn(string,) -> string) {
 # 
 # }
 
-fn fib(n: int): int {
+fn fib(n: int) -> int {
   if n <= 1 {
     return n;
   }
@@ -40,13 +40,13 @@ fn main() {
 #   test(x * 1);
 # }
 # 
-# fn not_returning(): int {
+# fn not_returning() -> int {
 #   if true {
 #     return 10;
 #   }
 # }
 # 
-# fn returning(): int {
+# fn returning() -> int {
 #   if true {
 #     return 1;
 #   } else if true {

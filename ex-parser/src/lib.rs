@@ -133,7 +133,7 @@ fn parse_function_signature(
         return Err(());
     };
 
-    let return_type = if parser.first().is_kind(TokenKind::Colon) {
+    let return_type = if parser.first().is_kind(TokenKind::Arrow) {
         Some(parse_function_return_type(
             id_alloc,
             parser,
@@ -213,20 +213,20 @@ fn parse_function_return_type(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<ASTFunctionReturnType, ()> {
-    let colon = if let Some(id) = parser.first().kind(TokenKind::Colon) {
+    let arrow = if let Some(id) = parser.first().kind(TokenKind::Arrow) {
         parser.consume();
         id
     } else {
-        unexpected_token(parser.first(), &[*crate::COLON], file, diagnostics);
+        unexpected_token(parser.first(), &[*crate::ARROW], file, diagnostics);
         return Err(());
     };
 
     let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
-    let span = colon.span.to(typename.span);
+    let span = arrow.span.to(typename.span);
 
     Ok(ASTFunctionReturnType {
-        colon,
+        arrow,
         typename,
         span,
     })
@@ -1381,7 +1381,7 @@ fn parse_typename_function(
         return Err(());
     };
 
-    let return_type = if parser.first().is_kind(TokenKind::Colon) {
+    let return_type = if parser.first().is_kind(TokenKind::Arrow) {
         Some(parse_typename_function_return_type(
             id_alloc,
             parser,
@@ -1442,20 +1442,20 @@ fn parse_typename_function_return_type(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<TypenameFunctionReturnType, ()> {
-    let colon = if let Some(id) = parser.first().kind(TokenKind::Colon) {
+    let arrow = if let Some(id) = parser.first().kind(TokenKind::Arrow) {
         parser.consume();
         id
     } else {
-        unexpected_token(parser.first(), &[*crate::COLON], file, diagnostics);
+        unexpected_token(parser.first(), &[*crate::ARROW], file, diagnostics);
         return Err(());
     };
 
     let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
 
-    let span = colon.span.to(typename.span);
+    let span = arrow.span.to(typename.span);
 
     Ok(TypenameFunctionReturnType {
-        colon,
+        arrow,
         typename: Box::new(typename),
         span,
     })

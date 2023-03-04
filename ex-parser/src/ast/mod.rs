@@ -40,7 +40,7 @@ pub struct TypenameFunctionParameter {
 
 #[derive(Debug, Clone, Hash)]
 pub struct TypenameFunctionReturnType {
-    pub colon: Id,
+    pub arrow: Id,
     pub typename: Box<Typename>,
     pub span: Span,
 }
@@ -104,7 +104,7 @@ pub struct ASTFunctionParameter {
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTFunctionReturnType {
-    pub colon: Id,
+    pub arrow: Id,
     pub typename: Typename,
     pub span: Span,
 }

@@ -15,6 +15,7 @@ pub enum TokenKind {
     Comma,        // ","
     Colon,        // ":"
     Semicolon,    // ";"
+    Arrow,        // "->"
     // Assignment operators
     Assign,       // "="
     AssignAdd,    // "+="
@@ -77,6 +78,7 @@ impl TokenKind {
             TokenKind::Comma => *crate::COMMA,
             TokenKind::Colon => *crate::COLON,
             TokenKind::Semicolon => *crate::SEMICOLON,
+            TokenKind::Arrow => *crate::ARROW,
             TokenKind::Assign => *crate::ASSIGN,
             TokenKind::AssignAdd => *crate::ASSIGN_ADD,
             TokenKind::AssignSub => *crate::ASSIGN_SUB,

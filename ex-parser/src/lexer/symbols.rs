@@ -14,6 +14,7 @@ lazy_static! {
     pub static ref COMMA: Symbol = Symbol::from_str(",");
     pub static ref COLON: Symbol = Symbol::from_str(":");
     pub static ref SEMICOLON: Symbol = Symbol::from_str(";");
+    pub static ref ARROW: Symbol = Symbol::from_str("->");
 }
 
 lazy_static! {

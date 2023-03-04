@@ -46,6 +46,7 @@ impl Token {
             },
             TokenKind::Sub => match &next.kind {
                 TokenKind::Assign => TokenKind::AssignSub,
+                TokenKind::Gt => TokenKind::Arrow,
                 _ => return None,
             },
             TokenKind::Mul => match next.kind {
@@ -105,6 +106,7 @@ impl Token {
             | TokenKind::CloseBracket
             | TokenKind::Comma
             | TokenKind::Semicolon
+            | TokenKind::Arrow
             | TokenKind::AssignAdd
             | TokenKind::AssignSub
             | TokenKind::AssignMul
