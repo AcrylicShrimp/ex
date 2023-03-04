@@ -19,13 +19,13 @@ impl FunctionTable {
     pub fn lookup_function(&self, symbol: Symbol) -> Option<&Function> {
         self.function_symbols
             .get(&symbol)
-            .and_then(|node_id| self.functions.get(node_id))
+            .and_then(|node| self.functions.get(node))
     }
 
     pub fn lookup_scope(&self, symbol: Symbol) -> Option<&FunctionScopeTable> {
         self.function_symbols
             .get(&symbol)
-            .and_then(|node_id| self.function_scopes.get(node_id))
+            .and_then(|node| self.function_scopes.get(node))
     }
 }
 

@@ -5,6 +5,7 @@ use ex_optimization::eliminate_dead_code;
 use ex_parser::{parse_ast, ASTProgram};
 use ex_resolve_ref::{
     resolve_ast, AssignmentLhsTable, FunctionTable, SymbolReferenceTable, TypeReferenceTable,
+    UserTypeTable,
 };
 use ex_span::SourceFile;
 use ex_type_checking::{check_types, propagate_type_variables, TypeTable};
@@ -13,6 +14,7 @@ use std::sync::{mpsc::Sender, Arc};
 pub struct Context {
     pub ast: ASTProgram,
     pub function_table: FunctionTable,
+    pub user_type_table: UserTypeTable,
     pub symbol_reference_table: SymbolReferenceTable,
     pub type_reference_table: TypeReferenceTable,
     pub assignment_lhs_table: AssignmentLhsTable,
@@ -23,8 +25,13 @@ impl Context {
     pub fn compile(file: Arc<SourceFile>, diagnostics: Arc<Sender<Diagnostics>>) -> Self {
         let ast = parse_ast(file.clone(), diagnostics.clone());
 
-        let (function_table, symbol_reference_table, type_reference_table, assignment_lhs_table) =
-            resolve_ast(&ast, &file, &diagnostics);
+        let (
+            function_table,
+            user_type_table,
+            symbol_reference_table,
+            type_reference_table,
+            assignment_lhs_table,
+        ) = resolve_ast(&ast, &file, &diagnostics);
 
         let type_table_builder = propagate_type_variables(
             &function_table,
@@ -57,6 +64,7 @@ impl Context {
         Self {
             ast,
             function_table,
+            user_type_table,
             symbol_reference_table,
             type_reference_table,
             assignment_lhs_table,

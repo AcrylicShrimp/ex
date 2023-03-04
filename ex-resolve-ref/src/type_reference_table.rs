@@ -1,5 +1,6 @@
 use ex_parser::NodeId;
 use ex_span::Span;
+use ex_symbol::Symbol;
 use std::{collections::HashMap, fmt::Display};
 
 #[derive(Default, Debug, Clone)]
@@ -37,6 +38,9 @@ pub enum TypeKind {
         parameters: Vec<TypeKind>,
         return_type: Box<TypeKind>,
     },
+    UserTypeStruct {
+        symbol: Symbol,
+    },
 }
 
 impl TypeKind {
@@ -71,6 +75,10 @@ impl TypeKind {
         }
     }
 
+    pub fn user_type_struct(symbol: Symbol) -> Self {
+        Self::UserTypeStruct { symbol }
+    }
+
     pub fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
     }
@@ -98,6 +106,10 @@ impl TypeKind {
     pub fn is_callable(&self) -> bool {
         matches!(self, Self::Callable { .. })
     }
+
+    pub fn is_user_type_struct(&self) -> bool {
+        matches!(self, Self::UserTypeStruct { .. })
+    }
 }
 
 impl Display for TypeKind {
@@ -123,7 +135,10 @@ impl Display for TypeKind {
                     write!(f, "{}", parameter)?;
                 }
 
-                write!(f, "): {}", return_type)
+                write!(f, ") -> {}", return_type)
+            }
+            TypeKind::UserTypeStruct { symbol } => {
+                write!(f, "struct {}", symbol)
             }
         }
     }

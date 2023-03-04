@@ -6,7 +6,12 @@ struct Test {
   bar: int;
   baz: float;
   bazz: string;
+  test: Test;
 }
+
+# fn foo() -> Test {
+#   
+# }
 
 fn print(x: int) {
   

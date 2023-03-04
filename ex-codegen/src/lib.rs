@@ -884,6 +884,7 @@ fn type_kind_to_type_id(type_table: &mut TypeTable, type_kind: &NodeTypeKind) ->
                 .collect(),
             return_type: type_kind_to_type_id(type_table, return_type),
         },
+        NodeTypeKind::UserTypeStruct { symbol } => TypeKind::UserTypeStruct { symbol: *symbol },
     };
     type_table.insert(type_kind)
 }

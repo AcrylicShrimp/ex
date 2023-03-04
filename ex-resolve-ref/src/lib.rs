@@ -5,6 +5,7 @@ mod scope_symbol_table;
 mod symbol_node;
 mod symbol_reference_table;
 mod type_reference_table;
+mod user_type_table;
 
 pub use assignment_lhs_table::*;
 pub use function_scope_table::*;
@@ -13,15 +14,17 @@ pub use scope_symbol_table::*;
 pub use symbol_node::*;
 pub use symbol_reference_table::*;
 pub use type_reference_table::*;
+pub use user_type_table::*;
 
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
 use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTProgram, ASTStatementKind,
-    ASTTopLevelKind, Typename, TypenameKind,
+    ASTStruct, ASTTopLevelKind, Typename, TypenameKind,
 };
-use ex_span::SourceFile;
+use ex_span::{SourceFile, Span};
+use ex_symbol::Symbol;
 use std::{
-    collections::hash_map::Entry,
+    collections::{hash_map::Entry, HashMap},
     sync::{mpsc::Sender, Arc},
 };
 
@@ -31,16 +34,57 @@ pub fn resolve_ast(
     diagnostics: &Sender<Diagnostics>,
 ) -> (
     FunctionTable,
+    UserTypeTable,
     SymbolReferenceTable,
     TypeReferenceTable,
     AssignmentLhsTable,
 ) {
-    let mut functions = Vec::new();
+    let mut top_level_table = HashMap::<Symbol, Span>::new();
     let mut function_table = FunctionTable::new();
+    let mut user_type_table = UserTypeTable::new();
+    let mut functions = Vec::new();
+    let mut structs = Vec::new();
 
     for top_level in &ast.top_levels {
         match &top_level.kind {
             ASTTopLevelKind::Function(ast) => {
+                match top_level_table.entry(ast.signature.name.symbol) {
+                    Entry::Occupied(entry) => {
+                        diagnostics
+                            .send(Diagnostics {
+                                level: DiagnosticsLevel::Error,
+                                message: format!(
+                                    "duplicated top level {}",
+                                    ast.signature.name.symbol
+                                ),
+                                origin: Some(DiagnosticsOrigin {
+                                    file: file.clone(),
+                                    span: ast.signature.name.span,
+                                }),
+                                sub_diagnostics: vec![
+                                    SubDiagnostics {
+                                        level: DiagnosticsLevel::Hint,
+                                        message: format!("previous definition here"),
+                                        origin: Some(DiagnosticsOrigin {
+                                            file: file.clone(),
+                                            span: *entry.get(),
+                                        }),
+                                    },
+                                    SubDiagnostics {
+                                        level: DiagnosticsLevel::Warning,
+                                        message: format!("duplicated one will be ignored"),
+                                        origin: None,
+                                    },
+                                ],
+                            })
+                            .unwrap();
+                        continue;
+                    }
+                    Entry::Vacant(entry) => {
+                        entry.insert(ast.signature.name.span);
+                    }
+                }
+
                 let function = Function::new(
                     top_level.id,
                     ast.signature.name,
@@ -66,30 +110,29 @@ pub fn resolve_ast(
                 function_table
                     .function_scopes
                     .insert(top_level.id, scope_table);
-
-                match function_table
+                function_table
                     .function_symbols
-                    .entry(ast.signature.name.symbol)
-                {
+                    .insert(ast.signature.name.symbol, top_level.id);
+
+                functions.push(ast);
+            }
+            ASTTopLevelKind::Struct(ast) => {
+                match top_level_table.entry(ast.name.symbol) {
                     Entry::Occupied(entry) => {
-                        let previous = function_table.functions.get(entry.get()).unwrap();
                         diagnostics
                             .send(Diagnostics {
                                 level: DiagnosticsLevel::Error,
-                                message: format!(
-                                    "duplicated function {}",
-                                    ast.signature.name.symbol
-                                ),
+                                message: format!("duplicated top level {}", ast.name.symbol),
                                 origin: Some(DiagnosticsOrigin {
                                     file: file.clone(),
-                                    span: ast.signature.name.span,
+                                    span: ast.name.span,
                                 }),
                                 sub_diagnostics: vec![SubDiagnostics {
                                     level: DiagnosticsLevel::Hint,
                                     message: format!("previous definition here"),
                                     origin: Some(DiagnosticsOrigin {
                                         file: file.clone(),
-                                        span: previous.name.span,
+                                        span: *entry.get(),
                                     }),
                                 }],
                             })
@@ -97,13 +140,30 @@ pub fn resolve_ast(
                         continue;
                     }
                     Entry::Vacant(entry) => {
-                        entry.insert(top_level.id);
+                        entry.insert(ast.name.span);
                     }
                 }
 
-                functions.push(ast);
+                let user_type_struct = UserTypeStruct::new(
+                    top_level.id,
+                    ast.name,
+                    ast.fields.iter().map(|field| field.name).collect(),
+                    ast.fields
+                        .iter()
+                        .map(|field| field.typename.clone())
+                        .collect(),
+                    ast.span,
+                );
+
+                user_type_table
+                    .user_types
+                    .insert(top_level.id, UserTypeKind::Struct(user_type_struct));
+                user_type_table
+                    .user_type_symbols
+                    .insert(ast.name.symbol, top_level.id);
+
+                structs.push(ast);
             }
-            ASTTopLevelKind::Struct(..) => {}
         }
     }
 
@@ -112,6 +172,8 @@ pub fn resolve_ast(
     let mut assignment_lhs_table = AssignmentLhsTable::new();
 
     for ast in functions {
+        check_function_duplicated_parameters(ast, file, diagnostics);
+
         let scope_table = function_table
             .lookup_scope(ast.signature.name.symbol)
             .unwrap();
@@ -123,7 +185,13 @@ pub fn resolve_ast(
             file,
             diagnostics,
         );
-        resolve_type_references(&mut type_reference_table, ast, file, diagnostics);
+        resolve_type_references(
+            &mut type_reference_table,
+            &user_type_table,
+            ast,
+            file,
+            diagnostics,
+        );
         resolve_assignment_lhs(
             &mut assignment_lhs_table,
             &symbol_reference_table,
@@ -133,12 +201,96 @@ pub fn resolve_ast(
         );
     }
 
+    for ast in structs {
+        check_user_type_struct_duplicated_fields(ast, file, diagnostics);
+        resolve_type_references_user_type_struct(
+            &mut type_reference_table,
+            &user_type_table,
+            ast,
+            file,
+            diagnostics,
+        );
+    }
+
     (
         function_table,
+        user_type_table,
         symbol_reference_table,
         type_reference_table,
         assignment_lhs_table,
     )
+}
+
+fn check_function_duplicated_parameters(
+    ast: &ASTFunction,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    let mut parameters = HashMap::<Symbol, Span>::new();
+
+    for parameter in &ast.signature.parameters {
+        match parameters.entry(parameter.name.symbol) {
+            Entry::Occupied(entry) => {
+                diagnostics
+                    .send(Diagnostics {
+                        level: DiagnosticsLevel::Error,
+                        message: format!("duplicated parameter {}", parameter.name.symbol),
+                        origin: Some(DiagnosticsOrigin {
+                            file: file.clone(),
+                            span: parameter.name.span,
+                        }),
+                        sub_diagnostics: vec![SubDiagnostics {
+                            level: DiagnosticsLevel::Hint,
+                            message: format!("previous definition here"),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: *entry.get(),
+                            }),
+                        }],
+                    })
+                    .unwrap();
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(parameter.span);
+            }
+        }
+    }
+}
+
+fn check_user_type_struct_duplicated_fields(
+    ast: &ASTStruct,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    let mut fields = HashMap::<Symbol, Span>::new();
+
+    for field in &ast.fields {
+        match fields.entry(field.name.symbol) {
+            Entry::Occupied(entry) => {
+                diagnostics
+                    .send(Diagnostics {
+                        level: DiagnosticsLevel::Error,
+                        message: format!("duplicated field {}", field.name.symbol),
+                        origin: Some(DiagnosticsOrigin {
+                            file: file.clone(),
+                            span: field.name.span,
+                        }),
+                        sub_diagnostics: vec![SubDiagnostics {
+                            level: DiagnosticsLevel::Hint,
+                            message: format!("previous definition here"),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: *entry.get(),
+                            }),
+                        }],
+                    })
+                    .unwrap();
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(field.span);
+            }
+        }
+    }
 }
 
 fn resolve_scopes(
@@ -668,28 +820,43 @@ fn resolve_symbol_references_expression(
 
 fn resolve_type_references(
     type_reference_table: &mut TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast: &ASTFunction,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
     for parameter in &ast.signature.parameters {
-        resolve_type_reference(type_reference_table, &parameter.typename, file, diagnostics);
+        resolve_type_reference(
+            type_reference_table,
+            user_type_table,
+            &parameter.typename,
+            file,
+            diagnostics,
+        );
     }
 
     if let Some(return_type) = &ast.signature.return_type {
         resolve_type_reference(
             type_reference_table,
+            user_type_table,
             &return_type.typename,
             file,
             diagnostics,
         );
     }
 
-    resolve_type_references_stmt_block(type_reference_table, &ast.body_block, file, diagnostics);
+    resolve_type_references_stmt_block(
+        type_reference_table,
+        user_type_table,
+        &ast.body_block,
+        file,
+        diagnostics,
+    );
 }
 
 fn resolve_type_references_stmt_block(
     type_reference_table: &mut TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast: &ASTBlock,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
@@ -699,6 +866,7 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::Block(stmt_block) => {
                 resolve_type_references_stmt_block(
                     type_reference_table,
+                    user_type_table,
                     stmt_block,
                     file,
                     diagnostics,
@@ -708,6 +876,7 @@ fn resolve_type_references_stmt_block(
                 if let Some(let_type) = &stmt_let.let_type {
                     resolve_type_reference(
                         type_reference_table,
+                        user_type_table,
                         &let_type.typename,
                         file,
                         diagnostics,
@@ -717,6 +886,7 @@ fn resolve_type_references_stmt_block(
                 if let Some(let_assignment) = &stmt_let.let_assignment {
                     resolve_type_references_expression(
                         type_reference_table,
+                        user_type_table,
                         &let_assignment.expression,
                         file,
                         diagnostics,
@@ -726,12 +896,14 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::If(stmt_if) => {
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &stmt_if.expression,
                     file,
                     diagnostics,
                 );
                 resolve_type_references_stmt_block(
                     type_reference_table,
+                    user_type_table,
                     &stmt_if.body_block,
                     file,
                     diagnostics,
@@ -740,12 +912,14 @@ fn resolve_type_references_stmt_block(
                 for single_else_if in &stmt_if.single_else_ifs {
                     resolve_type_references_expression(
                         type_reference_table,
+                        user_type_table,
                         &single_else_if.expression,
                         file,
                         diagnostics,
                     );
                     resolve_type_references_stmt_block(
                         type_reference_table,
+                        user_type_table,
                         &single_else_if.body_block,
                         file,
                         diagnostics,
@@ -755,6 +929,7 @@ fn resolve_type_references_stmt_block(
                 if let Some(single_else) = &stmt_if.single_else {
                     resolve_type_references_stmt_block(
                         type_reference_table,
+                        user_type_table,
                         &single_else.body_block,
                         file,
                         diagnostics,
@@ -764,6 +939,7 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::Loop(stmt_loop) => {
                 resolve_type_references_stmt_block(
                     type_reference_table,
+                    user_type_table,
                     &stmt_loop.body_block,
                     file,
                     diagnostics,
@@ -772,12 +948,14 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::While(stmt_while) => {
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &stmt_while.expression,
                     file,
                     diagnostics,
                 );
                 resolve_type_references_stmt_block(
                     type_reference_table,
+                    user_type_table,
                     &stmt_while.body_block,
                     file,
                     diagnostics,
@@ -789,6 +967,7 @@ fn resolve_type_references_stmt_block(
                 if let Some(expression) = &stmt_return.expression {
                     resolve_type_references_expression(
                         type_reference_table,
+                        user_type_table,
                         expression,
                         file,
                         diagnostics,
@@ -798,12 +977,14 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::Assignment(stmt_assignment) => {
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &stmt_assignment.left.expression,
                     file,
                     diagnostics,
                 );
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &stmt_assignment.right,
                     file,
                     diagnostics,
@@ -812,6 +993,7 @@ fn resolve_type_references_stmt_block(
             ASTStatementKind::Row(stmt_row) => {
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &stmt_row.expression,
                     file,
                     diagnostics,
@@ -823,6 +1005,7 @@ fn resolve_type_references_stmt_block(
 
 fn resolve_type_references_expression(
     type_reference_table: &mut TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     ast: &ASTExpression,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
@@ -831,12 +1014,14 @@ fn resolve_type_references_expression(
         ASTExpressionKind::Binary(expr_binary) => {
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_binary.left,
                 file,
                 diagnostics,
             );
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_binary.right,
                 file,
                 diagnostics,
@@ -845,6 +1030,7 @@ fn resolve_type_references_expression(
         ASTExpressionKind::Unary(expr_unary) => {
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_unary.right,
                 file,
                 diagnostics,
@@ -853,15 +1039,23 @@ fn resolve_type_references_expression(
         ASTExpressionKind::As(expr_as) => {
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_as.expression,
                 file,
                 diagnostics,
             );
-            resolve_type_reference(type_reference_table, &expr_as.typename, file, diagnostics);
+            resolve_type_reference(
+                type_reference_table,
+                user_type_table,
+                &expr_as.typename,
+                file,
+                diagnostics,
+            );
         }
         ASTExpressionKind::Call(expr_call) => {
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_call.expression,
                 file,
                 diagnostics,
@@ -870,6 +1064,7 @@ fn resolve_type_references_expression(
             for argument in &expr_call.arguments {
                 resolve_type_references_expression(
                     type_reference_table,
+                    user_type_table,
                     &argument.expression,
                     file,
                     diagnostics,
@@ -879,6 +1074,7 @@ fn resolve_type_references_expression(
         ASTExpressionKind::Paren(expr_paren) => {
             resolve_type_references_expression(
                 type_reference_table,
+                user_type_table,
                 &expr_paren.expression,
                 file,
                 diagnostics,
@@ -889,19 +1085,39 @@ fn resolve_type_references_expression(
     }
 }
 
+fn resolve_type_references_user_type_struct(
+    type_reference_table: &mut TypeReferenceTable,
+    user_type_table: &UserTypeTable,
+    ast: &ASTStruct,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) {
+    for field in &ast.fields {
+        resolve_type_reference(
+            type_reference_table,
+            user_type_table,
+            &field.typename,
+            file,
+            diagnostics,
+        );
+    }
+}
+
 fn resolve_type_reference(
     type_reference_table: &mut TypeReferenceTable,
+    user_type_table: &UserTypeTable,
     typename: &Typename,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
-    let type_kind = resolve_type_kind(typename, file, diagnostics);
+    let type_kind = resolve_type_kind(user_type_table, typename, file, diagnostics);
     type_reference_table
         .references
         .insert(typename.id, TypeReference::new(type_kind, typename.span));
 }
 
 fn resolve_type_kind(
+    user_type_table: &UserTypeTable,
     typename: &Typename,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
@@ -912,42 +1128,40 @@ fn resolve_type_kind(
             symbol if symbol == *ex_parser::TYPENAME_INT => TypeKind::integer(),
             symbol if symbol == *ex_parser::TYPENAME_FLOAT => TypeKind::float(),
             symbol if symbol == *ex_parser::TYPENAME_STRING => TypeKind::string(),
-            symbol => {
-                diagnostics
-                    .send(Diagnostics {
-                        level: DiagnosticsLevel::Error,
-                        message: format!("unresolved type reference {}", symbol),
-                        origin: Some(DiagnosticsOrigin {
-                            file: file.clone(),
-                            span: typename.span,
-                        }),
-                        sub_diagnostics: vec![SubDiagnostics {
-                            level: DiagnosticsLevel::Hint,
-                            message: format!(
-                                "type must be one of {}, {}, {}, {}, or {}",
-                                *ex_parser::TYPENAME_BOOL,
-                                *ex_parser::TYPENAME_INT,
-                                *ex_parser::TYPENAME_FLOAT,
-                                *ex_parser::TYPENAME_STRING,
-                                *ex_parser::KEYWORD_FN
-                            ),
-                            origin: None,
-                        }],
-                    })
-                    .unwrap();
-                TypeKind::unknown()
-            }
+            symbol => match user_type_table.lookup(id.symbol) {
+                Some(kind) => match kind {
+                    UserTypeKind::Struct(..) => TypeKind::user_type_struct(symbol),
+                },
+                None => {
+                    diagnostics
+                        .send(Diagnostics {
+                            level: DiagnosticsLevel::Error,
+                            message: format!("unresolved type reference {}", symbol),
+                            origin: Some(DiagnosticsOrigin {
+                                file: file.clone(),
+                                span: typename.span,
+                            }),
+                            sub_diagnostics: vec![],
+                        })
+                        .unwrap();
+                    TypeKind::unknown()
+                }
+            },
         },
         TypenameKind::Function(function) => TypeKind::callable(
             function
                 .parameters
                 .iter()
-                .map(|parameter| resolve_type_kind(&parameter.typename, file, diagnostics))
+                .map(|parameter| {
+                    resolve_type_kind(user_type_table, &parameter.typename, file, diagnostics)
+                })
                 .collect(),
             function
                 .return_type
                 .as_ref()
-                .map(|return_type| resolve_type_kind(&return_type.typename, file, diagnostics))
+                .map(|return_type| {
+                    resolve_type_kind(user_type_table, &return_type.typename, file, diagnostics)
+                })
                 .unwrap_or_else(|| TypeKind::empty()),
         ),
     }
