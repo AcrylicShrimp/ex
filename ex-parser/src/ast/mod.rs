@@ -122,6 +122,7 @@ pub enum ASTStatementKind {
     Let(ASTLet),
     If(ASTIf),
     Loop(ASTLoop),
+    While(ASTWhile),
     Break(ASTBreak),
     Continue(ASTContinue),
     Return(ASTReturn),
@@ -174,6 +175,14 @@ pub struct ASTIf {
 #[derive(Debug, Clone, Hash)]
 pub struct ASTLoop {
     pub keyword_loop: Id,
+    pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTWhile {
+    pub keyword_while: Id,
+    pub expression: ASTExpression,
     pub body_block: ASTBlock,
     pub span: Span,
 }

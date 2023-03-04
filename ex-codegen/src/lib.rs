@@ -49,7 +49,7 @@ pub use variable_table::*;
 use ex_parser::{
     ASTAssignmentOperatorKind, ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind,
     ASTFunction, ASTIf, ASTLoop, ASTProgram, ASTStatementKind, ASTTopLevelKind,
-    ASTUnaryOperatorKind, NodeId, Typename,
+    ASTUnaryOperatorKind, ASTWhile, NodeId, Typename,
 };
 use ex_resolve_ref::{
     AssignmentLhsKind, AssignmentLhsTable, Function as NodeFunction, FunctionTable, SymbolNodeKind,
@@ -228,6 +228,23 @@ fn codegen_function_stmt_block(
                     type_table,
                     function,
                     &stmt_loop,
+                    node_function,
+                    node_type_table,
+                    type_reference_table,
+                    symbol_reference_table,
+                    assignment_lhs_table,
+                );
+                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+                function.block_table.insert(block);
+
+                block = inner_exit_block;
+            }
+            ASTStatementKind::While(stmt_while) => {
+                let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_while(
+                    node_variable_table,
+                    type_table,
+                    function,
+                    &stmt_while,
                     node_function,
                     node_type_table,
                     type_reference_table,
@@ -507,6 +524,61 @@ fn codegen_function_stmt_loop(
         assignment_lhs_table,
     );
     entry_block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+    function.block_table.insert(entry_block);
+
+    inner_exit_block.new_instruction(InstructionKind::jump(entry_block_id, vec![]));
+    function.block_table.insert(inner_exit_block);
+
+    (entry_block_id, exit_block)
+}
+
+fn codegen_function_stmt_while(
+    node_variable_table: &mut HashMap<NodeId, VariableId>,
+    type_table: &mut TypeTable,
+    function: &mut Function,
+    ast: &ASTWhile,
+    node_function: &NodeFunction,
+    node_type_table: &NodeTypeTable,
+    type_reference_table: &TypeReferenceTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    assignment_lhs_table: &AssignmentLhsTable,
+) -> (BlockId, BasicBlock) {
+    let mut entry_block = function.new_block(iter_empty());
+    let condition = codegen_function_expression(
+        &mut entry_block,
+        node_variable_table,
+        type_table,
+        function,
+        &ast.expression,
+        node_function,
+        node_type_table,
+        type_reference_table,
+        symbol_reference_table,
+    );
+
+    let entry_block_id = entry_block.id;
+    let exit_block = function.new_block(iter_empty());
+
+    let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
+        node_variable_table,
+        type_table,
+        function,
+        Some(entry_block_id),
+        Some(exit_block.id),
+        &ast.body_block,
+        node_function,
+        node_type_table,
+        type_reference_table,
+        symbol_reference_table,
+        assignment_lhs_table,
+    );
+    entry_block.new_instruction(InstructionKind::branch(
+        condition,
+        inner_entry_block_id,
+        vec![],
+        exit_block.id,
+        vec![],
+    ));
     function.block_table.insert(entry_block);
 
     inner_exit_block.new_instruction(InstructionKind::jump(entry_block_id, vec![]));

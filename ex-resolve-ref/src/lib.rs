@@ -269,6 +269,24 @@ fn resolve_scopes_stmt_block(
                     diagnostics,
                 );
             }
+            ASTStatementKind::While(stmt_while) => {
+                resolve_scopes_expression(
+                    scope,
+                    scope_table,
+                    &stmt_while.expression,
+                    file,
+                    diagnostics,
+                );
+
+                let new_scope = scope_table.new_scope(statement.id, scope);
+                resolve_scopes_stmt_block(
+                    new_scope,
+                    scope_table,
+                    &stmt_while.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
             ASTStatementKind::Break(..) => {}
             ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
@@ -459,6 +477,24 @@ fn resolve_symbol_references_stmt_block(
                     scope_table,
                     function_table,
                     &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::While(stmt_while) => {
+                resolve_symbol_references_expression(
+                    symbol_reference_table,
+                    scope_table,
+                    function_table,
+                    &stmt_while.expression,
+                    file,
+                    diagnostics,
+                );
+                resolve_symbol_references_stmt_block(
+                    symbol_reference_table,
+                    scope_table,
+                    function_table,
+                    &stmt_while.body_block,
                     file,
                     diagnostics,
                 );
@@ -732,6 +768,20 @@ fn resolve_type_references_stmt_block(
                     diagnostics,
                 );
             }
+            ASTStatementKind::While(stmt_while) => {
+                resolve_type_references_expression(
+                    type_reference_table,
+                    &stmt_while.expression,
+                    file,
+                    diagnostics,
+                );
+                resolve_type_references_stmt_block(
+                    type_reference_table,
+                    &stmt_while.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
             ASTStatementKind::Break(..) => {}
             ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
@@ -971,6 +1021,15 @@ fn resolve_assignment_lhs_stmt_block(
                     assignment_lhs_table,
                     symbol_reference_table,
                     &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::While(stmt_while) => {
+                resolve_assignment_lhs_stmt_block(
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    &stmt_while.body_block,
                     file,
                     diagnostics,
                 );

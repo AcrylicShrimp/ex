@@ -28,6 +28,15 @@ fn main() {
     print(value);
     print(fib2(10) + fib(10));
   }
+
+  let value = 0;
+
+  while value != 10 {
+    value += 1;
+    print(value);
+    print(fib2(10) + fib(10));
+  }
+
   print(1 << 2);
 }
 

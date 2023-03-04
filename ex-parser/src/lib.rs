@@ -266,6 +266,13 @@ fn parse_statement(
             span: loop_statement.span,
             kind: ASTStatementKind::Loop(loop_statement),
         })
+    } else if parser.first().is_keyword(*crate::KEYWORD_WHILE) {
+        let while_statement = parse_while(id_alloc, parser, file, diagnostics)?;
+        Ok(ASTStatement {
+            id: id_alloc.allocate(),
+            span: while_statement.span,
+            kind: ASTStatementKind::While(while_statement),
+        })
     } else if parser.first().is_keyword(*crate::KEYWORD_BREAK) {
         let break_statement = parse_break(parser, file, diagnostics)?;
         Ok(ASTStatement {
@@ -561,6 +568,34 @@ fn parse_loop(
 
     Ok(ASTLoop {
         keyword_loop,
+        body_block,
+        span,
+    })
+}
+
+fn parse_while(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTWhile, ()> {
+    let keyword_while = if let Some(id) = parser.first().keyword(*crate::KEYWORD_WHILE) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::KEYWORD_WHILE], file, diagnostics);
+        return Err(());
+    };
+
+    let expression = parse_expression(id_alloc, parser, file, diagnostics)?;
+
+    let body_block = parse_block(id_alloc, parser, file, diagnostics)?;
+
+    let span = keyword_while.span.to(body_block.span);
+
+    Ok(ASTWhile {
+        keyword_while,
+        expression,
         body_block,
         span,
     })

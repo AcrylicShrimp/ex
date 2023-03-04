@@ -206,6 +206,39 @@ pub fn check_types_stmt_block(
                     diagnostics,
                 );
             }
+            ASTStatementKind::While(stmt_while) => {
+                check_types_expression(type_table, &stmt_while.expression, file, diagnostics);
+
+                if let Some(expression_type_kind) = type_table.types.get(&stmt_while.expression.id)
+                {
+                    if !expression_type_kind.is_boolean() {
+                        diagnostics
+                            .send(Diagnostics {
+                                level: DiagnosticsLevel::Error,
+                                message: format!(
+                                    "expected type `{}`, found `{}`",
+                                    TypeKind::boolean(),
+                                    expression_type_kind
+                                ),
+                                origin: Some(DiagnosticsOrigin {
+                                    file: file.clone(),
+                                    span: stmt_while.expression.span,
+                                }),
+                                sub_diagnostics: vec![],
+                            })
+                            .unwrap();
+                    }
+                }
+
+                check_types_stmt_block(
+                    type_table,
+                    type_reference_table,
+                    ast_function,
+                    &stmt_while.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
             ASTStatementKind::Break(..) => {}
             ASTStatementKind::Continue(..) => {}
             ASTStatementKind::Return(stmt_return) => {
@@ -616,6 +649,34 @@ fn propagate_type_variables_stmt_block(
                     type_reference_table,
                     ast_function,
                     &stmt_loop.body_block,
+                    file,
+                    diagnostics,
+                );
+            }
+            ASTStatementKind::While(stmt_while) => {
+                let type_var = propagate_type_variables_expression(
+                    type_table_builder,
+                    function_table,
+                    symbol_reference_table,
+                    type_reference_table,
+                    &stmt_while.expression,
+                    file,
+                    diagnostics,
+                );
+                type_table_builder
+                    .variable_constraints
+                    .push(TypeVariableConstraint::subtype(
+                        type_var,
+                        TypeVariableConstraintOperand::concrete(TypeKind::boolean()),
+                    ));
+
+                propagate_type_variables_stmt_block(
+                    type_table_builder,
+                    function_table,
+                    symbol_reference_table,
+                    type_reference_table,
+                    ast_function,
+                    &stmt_while.body_block,
                     file,
                     diagnostics,
                 );

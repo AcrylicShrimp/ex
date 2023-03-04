@@ -11,7 +11,7 @@ pub use function_control_flow_graph::*;
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTLoop, ASTProgram,
-    ASTStatementKind, ASTTopLevelKind, NodeId,
+    ASTStatementKind, ASTTopLevelKind, ASTWhile, NodeId,
 };
 use ex_resolve_ref::{AssignmentLhsKind, AssignmentLhsTable, FunctionTable, SymbolReferenceTable};
 use ex_span::SourceFile;
@@ -150,6 +150,21 @@ fn build_function_cfg_stmt_block(
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_loop,
+                    file,
+                    diagnostics,
+                );
+                block.exit = Some(BasicBlockExit::jump(inner_entry_id));
+                cfg.insert_block(block);
+
+                block = inner_exit_block;
+            }
+            ASTStatementKind::While(stmt_while) => {
+                let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_while(
+                    block_id_alloc,
+                    cfg,
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    stmt_while,
                     file,
                     diagnostics,
                 );
@@ -376,6 +391,39 @@ fn build_function_cfg_stmt_loop(
         diagnostics,
     );
     entry_block.exit = Some(BasicBlockExit::jump(inner_entry_id));
+    cfg.insert_block(entry_block);
+
+    inner_exit_block.exit = Some(BasicBlockExit::jump(entry_block_id));
+    cfg.insert_block(inner_exit_block);
+
+    (entry_block_id, exit_block)
+}
+
+fn build_function_cfg_stmt_while(
+    block_id_alloc: &mut BlockIdAllocator,
+    cfg: &mut FunctionControlFlowGraph,
+    assignment_lhs_table: &AssignmentLhsTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTWhile,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> (BlockId, BasicBlock) {
+    let entry_block_id = block_id_alloc.allocate();
+    let mut entry_block = BasicBlock::new(entry_block_id);
+    let exit_block = BasicBlock::new(block_id_alloc.allocate());
+
+    let (inner_entry_id, mut inner_exit_block) = build_function_cfg_stmt_block(
+        block_id_alloc,
+        cfg,
+        Some(entry_block_id),
+        Some(exit_block.id),
+        assignment_lhs_table,
+        symbol_reference_table,
+        &ast.body_block,
+        file,
+        diagnostics,
+    );
+    entry_block.exit = Some(BasicBlockExit::branch(inner_entry_id, exit_block.id));
     cfg.insert_block(entry_block);
 
     inner_exit_block.exit = Some(BasicBlockExit::jump(entry_block_id));

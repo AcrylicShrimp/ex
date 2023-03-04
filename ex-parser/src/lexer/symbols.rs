@@ -65,6 +65,7 @@ lazy_static! {
     pub static ref KEYWORD_IF: Symbol = Symbol::from_str("if");
     pub static ref KEYWORD_ELSE: Symbol = Symbol::from_str("else");
     pub static ref KEYWORD_LOOP: Symbol = Symbol::from_str("loop");
+    pub static ref KEYWORD_WHILE: Symbol = Symbol::from_str("while");
     pub static ref KEYWORD_BREAK: Symbol = Symbol::from_str("break");
     pub static ref KEYWORD_CONTINUE: Symbol = Symbol::from_str("continue");
     pub static ref KEYWORD_RETURN: Symbol = Symbol::from_str("return");
