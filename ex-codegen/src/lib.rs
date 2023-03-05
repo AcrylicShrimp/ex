@@ -17,6 +17,7 @@ mod type_id;
 mod type_id_allocator;
 mod type_kind;
 mod type_table;
+mod user_type_struct;
 mod variable;
 mod variable_id;
 mod variable_id_allocator;
@@ -41,6 +42,7 @@ pub use type_id::*;
 pub use type_id_allocator::*;
 pub use type_kind::*;
 pub use type_table::*;
+pub use user_type_struct::*;
 pub use variable::*;
 pub use variable_id::*;
 pub use variable_id_allocator::*;
@@ -55,6 +57,7 @@ use ex_resolve_ref::{
     AssignmentLhsKind, AssignmentLhsTable, Function as NodeFunction, FunctionTable, SymbolNodeKind,
     SymbolReferenceTable, TypeKind as NodeTypeKind, TypeReferenceTable,
 };
+use ex_symbol::Symbol;
 use ex_type_checking::TypeTable as NodeTypeTable;
 use std::{collections::HashMap, iter::empty as iter_empty};
 
@@ -70,10 +73,38 @@ pub fn codegen(
 
     for top_level in &ast.top_levels {
         match &top_level.kind {
+            ASTTopLevelKind::Function(..) => {}
+            ASTTopLevelKind::Struct(ast) => {
+                let user_type_struct = UserTypeStruct::new(
+                    ast.name.symbol,
+                    ast.fields
+                        .iter()
+                        .map(|field| {
+                            UserTypeStructField::new(
+                                field.name.symbol,
+                                typename_to_type_id(
+                                    &mut program.type_table,
+                                    type_reference_table,
+                                    &field.typename,
+                                ),
+                            )
+                        })
+                        .collect(),
+                );
+                program
+                    .user_type_struct_table
+                    .insert(ast.name.symbol, user_type_struct);
+            }
+        }
+    }
+
+    for top_level in &ast.top_levels {
+        match &top_level.kind {
             ASTTopLevelKind::Function(ast) => {
                 let function = function_table.functions.get(&top_level.id).unwrap();
                 let function = codegen_function(
                     &mut program.type_table,
+                    &program.user_type_struct_table,
                     ast,
                     function,
                     node_type_table,
@@ -92,6 +123,7 @@ pub fn codegen(
 
 fn codegen_function(
     type_table: &mut TypeTable,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTFunction,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -124,6 +156,7 @@ fn codegen_function(
         &mut function,
         None,
         None,
+        user_type_struct_table,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -150,6 +183,7 @@ fn codegen_function_stmt_block(
     function: &mut Function,
     loop_entry_block_id: Option<BlockId>,
     loop_exit_block_id: Option<BlockId>,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTBlock,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -169,6 +203,7 @@ fn codegen_function_stmt_block(
                     function,
                     loop_entry_block_id,
                     loop_exit_block_id,
+                    user_type_struct_table,
                     &stmt_block,
                     node_function,
                     node_type_table,
@@ -195,13 +230,18 @@ fn codegen_function_stmt_block(
                         node_variable_table,
                         type_table,
                         function,
+                        user_type_struct_table,
                         &let_assignment.expression,
                         node_function,
                         node_type_table,
                         type_reference_table,
                         symbol_reference_table,
                     );
-                    block.new_instruction(InstructionKind::store(variable, temporary, None));
+                    block.new_instruction(InstructionKind::store(
+                        Pointer::new(variable, vec![]),
+                        temporary,
+                        None,
+                    ));
                 }
             }
             ASTStatementKind::If(stmt_if) => {
@@ -211,6 +251,7 @@ fn codegen_function_stmt_block(
                     function,
                     loop_entry_block_id,
                     loop_exit_block_id,
+                    user_type_struct_table,
                     &stmt_if,
                     node_function,
                     node_type_table,
@@ -228,6 +269,7 @@ fn codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
+                    user_type_struct_table,
                     &stmt_loop,
                     node_function,
                     node_type_table,
@@ -245,6 +287,7 @@ fn codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
+                    user_type_struct_table,
                     &stmt_while,
                     node_function,
                     node_type_table,
@@ -276,6 +319,7 @@ fn codegen_function_stmt_block(
                         node_variable_table,
                         type_table,
                         function,
+                        user_type_struct_table,
                         &expression,
                         node_function,
                         node_type_table,
@@ -289,30 +333,31 @@ fn codegen_function_stmt_block(
                 block = function.new_block(iter_empty());
             }
             ASTStatementKind::Assignment(stmt_assignment) => {
-                if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&stmt_assignment.left.id) {
-                    let variable = match lhs_kind {
-                        AssignmentLhsKind::Parameter { index } => {
-                            function.parameters[*index].variable_id
-                        }
-                        AssignmentLhsKind::Variable { node } => node_variable_table[node],
-                    };
-                    let temporary = codegen_function_expression(
-                        &mut block,
-                        node_variable_table,
-                        type_table,
-                        function,
-                        &stmt_assignment.right,
-                        node_function,
-                        node_type_table,
-                        type_reference_table,
-                        symbol_reference_table,
-                    );
-                    block.new_instruction(InstructionKind::store(
-                        variable,
-                        temporary,
-                        stmt_assignment.operator_kind.map(convert_assignment_op),
-                    ));
-                }
+                let pointer = lhs_expression_to_pointer(
+                    function,
+                    type_table,
+                    user_type_struct_table,
+                    node_variable_table,
+                    assignment_lhs_table,
+                    &stmt_assignment.left,
+                );
+                let temporary = codegen_function_expression(
+                    &mut block,
+                    node_variable_table,
+                    type_table,
+                    function,
+                    user_type_struct_table,
+                    &stmt_assignment.right,
+                    node_function,
+                    node_type_table,
+                    type_reference_table,
+                    symbol_reference_table,
+                );
+                block.new_instruction(InstructionKind::store(
+                    pointer,
+                    temporary,
+                    stmt_assignment.operator_kind.map(convert_assignment_op),
+                ));
             }
             ASTStatementKind::Row(stmt_row) => {
                 codegen_function_expression(
@@ -320,6 +365,7 @@ fn codegen_function_stmt_block(
                     node_variable_table,
                     type_table,
                     function,
+                    user_type_struct_table,
                     &stmt_row.expression,
                     node_function,
                     node_type_table,
@@ -339,6 +385,7 @@ fn codegen_function_stmt_if(
     function: &mut Function,
     loop_entry_block_id: Option<BlockId>,
     loop_exit_block_id: Option<BlockId>,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTIf,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -354,6 +401,7 @@ fn codegen_function_stmt_if(
         node_variable_table,
         type_table,
         function,
+        user_type_struct_table,
         &ast.expression,
         node_function,
         node_type_table,
@@ -366,6 +414,7 @@ fn codegen_function_stmt_if(
         function,
         loop_entry_block_id,
         loop_exit_block_id,
+        user_type_struct_table,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -398,6 +447,7 @@ fn codegen_function_stmt_if(
             node_variable_table,
             type_table,
             function,
+            user_type_struct_table,
             &single_else_if.expression,
             node_function,
             node_type_table,
@@ -410,6 +460,7 @@ fn codegen_function_stmt_if(
             function,
             loop_entry_block_id,
             loop_exit_block_id,
+            user_type_struct_table,
             &single_else_if.body_block,
             node_function,
             node_type_table,
@@ -443,6 +494,7 @@ fn codegen_function_stmt_if(
             function,
             loop_entry_block_id,
             loop_exit_block_id,
+            user_type_struct_table,
             &single_else.body_block,
             node_function,
             node_type_table,
@@ -500,6 +552,7 @@ fn codegen_function_stmt_loop(
     node_variable_table: &mut HashMap<NodeId, VariableId>,
     type_table: &mut TypeTable,
     function: &mut Function,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTLoop,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -517,6 +570,7 @@ fn codegen_function_stmt_loop(
         function,
         Some(entry_block_id),
         Some(exit_block.id),
+        user_type_struct_table,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -537,6 +591,7 @@ fn codegen_function_stmt_while(
     node_variable_table: &mut HashMap<NodeId, VariableId>,
     type_table: &mut TypeTable,
     function: &mut Function,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTWhile,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -550,6 +605,7 @@ fn codegen_function_stmt_while(
         node_variable_table,
         type_table,
         function,
+        user_type_struct_table,
         &ast.expression,
         node_function,
         node_type_table,
@@ -566,6 +622,7 @@ fn codegen_function_stmt_while(
         function,
         Some(entry_block_id),
         Some(exit_block.id),
+        user_type_struct_table,
         &ast.body_block,
         node_function,
         node_type_table,
@@ -593,6 +650,7 @@ fn codegen_function_expression(
     node_variable_table: &mut HashMap<NodeId, VariableId>,
     type_table: &mut TypeTable,
     function: &mut Function,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
     ast: &ASTExpression,
     node_function: &NodeFunction,
     node_type_table: &NodeTypeTable,
@@ -606,6 +664,7 @@ fn codegen_function_expression(
                 node_variable_table,
                 type_table,
                 function,
+                user_type_struct_table,
                 &expr_binary.left,
                 node_function,
                 node_type_table,
@@ -617,6 +676,7 @@ fn codegen_function_expression(
                 node_variable_table,
                 type_table,
                 function,
+                user_type_struct_table,
                 &expr_binary.right,
                 node_function,
                 node_type_table,
@@ -645,6 +705,7 @@ fn codegen_function_expression(
                 node_variable_table,
                 type_table,
                 function,
+                user_type_struct_table,
                 &expr_unary.right,
                 node_function,
                 node_type_table,
@@ -669,6 +730,7 @@ fn codegen_function_expression(
                 node_variable_table,
                 type_table,
                 function,
+                user_type_struct_table,
                 &expr_as.expression,
                 node_function,
                 node_type_table,
@@ -696,6 +758,7 @@ fn codegen_function_expression(
                 node_variable_table,
                 type_table,
                 function,
+                user_type_struct_table,
                 &expr_call.expression,
                 node_function,
                 node_type_table,
@@ -711,6 +774,7 @@ fn codegen_function_expression(
                         node_variable_table,
                         type_table,
                         function,
+                        user_type_struct_table,
                         &argument.expression,
                         node_function,
                         node_type_table,
@@ -728,11 +792,50 @@ fn codegen_function_expression(
             ));
             temporary
         }
+        ASTExpressionKind::Member(expr_member) => {
+            let expression = codegen_function_expression(
+                block,
+                node_variable_table,
+                type_table,
+                function,
+                user_type_struct_table,
+                &expr_member.expression,
+                node_function,
+                node_type_table,
+                type_reference_table,
+                symbol_reference_table,
+            );
+            let expression_type_id = type_kind_to_type_id(
+                type_table,
+                node_type_table
+                    .types
+                    .get(&expr_member.expression.id)
+                    .unwrap(),
+            );
+            let type_id =
+                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
+            let temporary = block.new_temporary(type_id);
+            let struct_symbol = type_table
+                .types
+                .get(&expression_type_id)
+                .unwrap()
+                .as_user_type_struct();
+            let index = user_type_struct_table
+                .get(&struct_symbol)
+                .unwrap()
+                .fields
+                .iter()
+                .position(|field| field.name == expr_member.member.symbol)
+                .unwrap();
+            block.new_instruction(InstructionKind::extract(expression, vec![index], temporary));
+            temporary
+        }
         ASTExpressionKind::Paren(expr_paren) => codegen_function_expression(
             block,
             node_variable_table,
             type_table,
             function,
+            user_type_struct_table,
             &expr_paren.expression,
             node_function,
             node_type_table,
@@ -777,9 +880,9 @@ fn codegen_function_expression(
                     let type_id = function.parameters[index].type_id;
                     let variable = function.parameters[index].variable_id;
                     let temporary = block.new_temporary(type_id);
-                    block.new_instruction(InstructionKind::assign(
+                    block.new_instruction(InstructionKind::load(
+                        Pointer::new(variable, vec![]),
                         temporary,
-                        Expression::new(ExpressionKind::variable(variable), type_id),
                     ));
                     temporary
                 }
@@ -790,9 +893,9 @@ fn codegen_function_expression(
                     );
                     let variable = node_variable_table[&symbol_reference.node].clone();
                     let temporary = block.new_temporary(type_id);
-                    block.new_instruction(InstructionKind::assign(
+                    block.new_instruction(InstructionKind::load(
+                        Pointer::new(variable, vec![]),
                         temporary,
-                        Expression::new(ExpressionKind::variable(variable), type_id),
                     ));
                     temporary
                 }
@@ -801,30 +904,105 @@ fn codegen_function_expression(
         ASTExpressionKind::StructLiteral(expr_struct_literal) => {
             let type_id =
                 type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let fields = expr_struct_literal
+            let struct_symbol = type_table.types[&type_id].as_user_type_struct();
+            let user_type_struct = &user_type_struct_table[&struct_symbol];
+            let mut field_with_indices = expr_struct_literal
                 .fields
                 .iter()
                 .map(|field| {
-                    codegen_function_expression(
-                        block,
-                        node_variable_table,
-                        type_table,
-                        function,
-                        &field.expression,
-                        node_function,
-                        node_type_table,
-                        type_reference_table,
-                        symbol_reference_table,
+                    (
+                        user_type_struct
+                            .fields
+                            .iter()
+                            .position(|f| f.name == field.name.symbol)
+                            .unwrap(),
+                        codegen_function_expression(
+                            block,
+                            node_variable_table,
+                            type_table,
+                            function,
+                            user_type_struct_table,
+                            &field.expression,
+                            node_function,
+                            node_type_table,
+                            type_reference_table,
+                            symbol_reference_table,
+                        ),
                     )
                 })
-                .collect();
+                .collect::<Vec<_>>();
+            field_with_indices.sort_unstable_by_key(|field| field.0);
             let temporary = block.new_temporary(type_id);
             block.new_instruction(InstructionKind::assign(
                 temporary,
-                Expression::new(ExpressionKind::struct_literal(type_id, fields), type_id),
+                Expression::new(
+                    ExpressionKind::struct_literal(
+                        type_id,
+                        field_with_indices
+                            .into_iter()
+                            .map(|field| field.1)
+                            .collect(),
+                    ),
+                    type_id,
+                ),
             ));
             temporary
         }
+    }
+}
+
+fn lhs_expression_to_pointer(
+    function: &Function,
+    type_table: &TypeTable,
+    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
+    node_variable_table: &HashMap<NodeId, VariableId>,
+    assignment_lhs_table: &AssignmentLhsTable,
+    expr: &ASTExpression,
+) -> Pointer {
+    match &expr.kind {
+        ASTExpressionKind::Member(expr_member) => {
+            let mut pointer = lhs_expression_to_pointer(
+                function,
+                type_table,
+                user_type_struct_table,
+                node_variable_table,
+                assignment_lhs_table,
+                &expr_member.expression,
+            );
+            let type_id = function.variable_table.variables[&pointer.variable].type_id;
+            let struct_symbol = type_table.types[&type_id].as_user_type_struct();
+            let index = user_type_struct_table
+                .get(&struct_symbol)
+                .unwrap()
+                .fields
+                .iter()
+                .position(|field| field.name == expr_member.member.symbol)
+                .unwrap();
+            pointer.indices.push(index);
+            pointer
+        }
+        ASTExpressionKind::Paren(expr_paren) => lhs_expression_to_pointer(
+            function,
+            type_table,
+            user_type_struct_table,
+            node_variable_table,
+            assignment_lhs_table,
+            &expr_paren.expression,
+        ),
+        ASTExpressionKind::IdReference(_) => {
+            match assignment_lhs_table.kinds.get(&expr.id).unwrap() {
+                AssignmentLhsKind::Parameter { index } => {
+                    return Pointer::new(function.parameters[*index].variable_id, vec![]);
+                }
+                AssignmentLhsKind::Variable { node } => {
+                    return Pointer::new(node_variable_table[node], vec![]);
+                }
+                AssignmentLhsKind::Field { .. } => {
+                    unreachable!()
+                }
+            }
+        }
+        _ => unreachable!(),
     }
 }
 

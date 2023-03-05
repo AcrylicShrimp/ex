@@ -1,6 +1,12 @@
 
 # This is a comment.
 
+fn __print_bool(x: bool) {}
+fn __print_int(x: int) {}
+fn __print_float(x: float) {}
+fn __print_string(x: string) {}
+fn __print_test(x: Test) {}
+
 struct Test {
   foo: bool;
   bar: int;
@@ -15,10 +21,10 @@ struct Test {
 
 fn foo() -> Test {
   return Test {
-    foo: false,
-    bar: 0,
-    baz: 0.1,
     bazz: "test",
+    bar: 0,
+    foo: false,
+    baz: 0.1,
   };
 }
 
@@ -38,6 +44,24 @@ fn fib(n: int) -> int {
 }
 
 fn main() {
+  let test = foo();
+  __print_test(test);
+  # __print_bool(test.foo);
+  # __print_int(test.bar + 1);
+  # __print_float(test.baz);
+  # __print_string(test.bazz);
+  test.foo = true;
+  __print_test(test);
+
+  let test2: Test;
+  test2.foo = true;
+  (test2.foo) = test2.foo;
+  test2.bar = 404;
+  # test2.baz = 4.4;
+  test2.bazz = "Hi, this is a test";
+
+  __print_test(test2);
+
   let fib2 = fib;
   let value = 0;
 
@@ -46,23 +70,23 @@ fn main() {
       break;
     }
     value = value + 1;
-    print(value);
-    print(fib2(10) + fib(10));
+    __print_int(value);
+    __print_int(fib2(10) + fib(10));
   }
 
   let value = 0;
 
   while value != 10 {
     value += 1;
-    print(value);
-    print(fib2(10) + fib(10));
+    __print_int(value);
+    __print_int(fib2(10) + fib(10));
   }
 
-  print(1 << 2);
+  __print_int(1 << 2);
 }
 
 # fn main() {
-#   print(+fib(10));
+#   __print_int(+fib(10));
 # }
 # 
 # fn test(n: int) {

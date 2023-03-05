@@ -1,4 +1,4 @@
-use crate::{TemporaryId, TypeId, VariableId};
+use crate::{TemporaryId, TypeId};
 use ex_parser::TokenLiteral;
 use ex_symbol::Symbol;
 
@@ -41,14 +41,8 @@ pub enum ExpressionKind {
         struct_type: TypeId,
         fields: Vec<TemporaryId>,
     },
-    Variable {
-        variable: VariableId,
-    },
     Function {
         function: Symbol,
-    },
-    Temporary {
-        temporary: TemporaryId,
     },
 }
 
@@ -91,16 +85,8 @@ impl ExpressionKind {
         }
     }
 
-    pub fn variable(variable: VariableId) -> Self {
-        Self::Variable { variable }
-    }
-
     pub fn function(function: Symbol) -> Self {
         Self::Function { function }
-    }
-
-    pub fn temporary(temporary: TemporaryId) -> Self {
-        Self::Temporary { temporary }
     }
 }
 

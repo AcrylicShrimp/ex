@@ -1,4 +1,5 @@
 use ex_parser::NodeId;
+use ex_symbol::Symbol;
 use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone)]
@@ -16,4 +17,5 @@ impl AssignmentLhsTable {
 pub enum AssignmentLhsKind {
     Parameter { index: usize },
     Variable { node: NodeId },
+    Field { field: Symbol },
 }

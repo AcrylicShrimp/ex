@@ -247,7 +247,7 @@ pub struct ASTReturn {
 
 #[derive(Debug, Clone, Hash)]
 pub struct ASTAssignment {
-    pub left: ASTAssignmentLeft,
+    pub left: ASTExpression,
     pub operator: Id,
     pub operator_kind: Option<ASTAssignmentOperatorKind>,
     pub right: ASTExpression,
@@ -272,13 +272,6 @@ pub enum ASTAssignmentOperatorKind {
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct ASTAssignmentLeft {
-    pub id: NodeId,
-    pub expression: ASTExpression,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
 pub struct ASTRow {
     pub expression: ASTExpression,
     pub semicolon: Id,
@@ -298,6 +291,7 @@ pub enum ASTExpressionKind {
     Unary(ASTUnaryExpression),
     As(ASTAsExpression),
     Call(ASTCallExpression),
+    Member(ASTMemberExpression),
     Paren(ASTParenExpression),       // single
     Literal(Literal),                // single
     IdReference(ASTIdReference),     // single
@@ -366,6 +360,14 @@ pub struct ASTCallExpression {
     pub paren_open: Id,
     pub arguments: Vec<ASTArgumentExpression>,
     pub paren_close: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTMemberExpression {
+    pub expression: Box<ASTExpression>,
+    pub dot: Id,
+    pub member: Id,
     pub span: Span,
 }
 

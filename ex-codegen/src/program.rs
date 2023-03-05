@@ -1,4 +1,4 @@
-use crate::{Function, TypeTable};
+use crate::{Function, TypeTable, UserTypeStruct};
 use ex_symbol::Symbol;
 use std::collections::HashMap;
 
@@ -6,6 +6,7 @@ use std::collections::HashMap;
 pub struct Program {
     pub functions: HashMap<Symbol, Function>,
     pub type_table: TypeTable,
+    pub user_type_struct_table: HashMap<Symbol, UserTypeStruct>,
 }
 
 impl Program {

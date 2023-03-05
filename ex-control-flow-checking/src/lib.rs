@@ -6,6 +6,8 @@ mod function_control_flow_graph;
 pub use basic_block::*;
 pub use block_id::*;
 pub use block_id_allocator::*;
+use ex_symbol::Symbol;
+use ex_type_checking::TypeTable;
 pub use function_control_flow_graph::*;
 
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
@@ -13,12 +15,17 @@ use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIf, ASTLoop, ASTProgram,
     ASTStatementKind, ASTTopLevelKind, ASTWhile, NodeId,
 };
-use ex_resolve_ref::{AssignmentLhsKind, AssignmentLhsTable, FunctionTable, SymbolReferenceTable};
+use ex_resolve_ref::{
+    AssignmentLhsKind, AssignmentLhsTable, FunctionTable, SymbolReferenceTable, TypeKind,
+    UserTypeKind, UserTypeTable,
+};
 use ex_span::SourceFile;
 use std::sync::{mpsc::Sender, Arc};
 
 pub fn check_control_flow(
     function_table: &FunctionTable,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTProgram,
@@ -30,6 +37,8 @@ pub fn check_control_flow(
             ASTTopLevelKind::Function(ast_function) => {
                 let function = function_table.functions.get(&top_level.id).unwrap();
                 let function_cfg = build_function_cfg(
+                    type_table,
+                    user_type_table,
                     assignment_lhs_table,
                     symbol_reference_table,
                     top_level.id,
@@ -45,6 +54,8 @@ pub fn check_control_flow(
 }
 
 fn build_function_cfg(
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast_id: NodeId,
@@ -60,6 +71,8 @@ fn build_function_cfg(
         &mut function_cfg,
         None,
         None,
+        type_table,
+        user_type_table,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -84,6 +97,8 @@ fn build_function_cfg_stmt_block(
     cfg: &mut FunctionControlFlowGraph,
     loop_entry_block_id: Option<BlockId>,
     loop_exit_block_id: Option<BlockId>,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTBlock,
@@ -103,6 +118,8 @@ fn build_function_cfg_stmt_block(
                     cfg,
                     loop_entry_block_id,
                     loop_exit_block_id,
+                    type_table,
+                    user_type_table,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_block,
@@ -118,6 +135,8 @@ fn build_function_cfg_stmt_block(
                 if let Some(let_assignment) = &stmt_let.let_assignment {
                     check_variable_usage(
                         cfg,
+                        type_table,
+                        user_type_table,
                         symbol_reference_table,
                         &let_assignment.expression,
                         file,
@@ -132,6 +151,8 @@ fn build_function_cfg_stmt_block(
                     cfg,
                     loop_entry_block_id,
                     loop_exit_block_id,
+                    type_table,
+                    user_type_table,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_if,
@@ -147,6 +168,8 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_loop(
                     block_id_alloc,
                     cfg,
+                    type_table,
+                    user_type_table,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_loop,
@@ -162,6 +185,8 @@ fn build_function_cfg_stmt_block(
                 let (inner_entry_id, inner_exit_block) = build_function_cfg_stmt_while(
                     block_id_alloc,
                     cfg,
+                    type_table,
+                    user_type_table,
                     assignment_lhs_table,
                     symbol_reference_table,
                     stmt_while,
@@ -219,6 +244,8 @@ fn build_function_cfg_stmt_block(
                 if let Some(expression) = &stmt_return.expression {
                     check_variable_usage(
                         cfg,
+                        type_table,
+                        user_type_table,
                         symbol_reference_table,
                         &expression,
                         file,
@@ -235,21 +262,28 @@ fn build_function_cfg_stmt_block(
                 // NOTE: We don't need to check the left side of the assignment, because it's a variable that is being assigned to.
                 check_variable_usage(
                     cfg,
+                    type_table,
+                    user_type_table,
                     symbol_reference_table,
                     &stmt_assignment.right,
                     file,
                     diagnostics,
                 );
 
-                if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&stmt_assignment.left.id) {
-                    if let AssignmentLhsKind::Variable { node } = lhs_kind {
-                        cfg.initialized_variables.insert(*node);
-                    }
-                }
+                mark_variable_as_initialized(
+                    cfg,
+                    type_table,
+                    user_type_table,
+                    assignment_lhs_table,
+                    symbol_reference_table,
+                    &stmt_assignment.left,
+                );
             }
             ASTStatementKind::Row(stmt_row) => {
                 check_variable_usage(
                     cfg,
+                    type_table,
+                    user_type_table,
                     symbol_reference_table,
                     &stmt_row.expression,
                     file,
@@ -267,6 +301,8 @@ fn build_function_cfg_stmt_if(
     cfg: &mut FunctionControlFlowGraph,
     loop_entry_block_id: Option<BlockId>,
     loop_exit_block_id: Option<BlockId>,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTIf,
@@ -277,6 +313,8 @@ fn build_function_cfg_stmt_if(
 
     check_variable_usage(
         cfg,
+        type_table,
+        user_type_table,
         symbol_reference_table,
         &ast.expression,
         file,
@@ -289,6 +327,8 @@ fn build_function_cfg_stmt_if(
         cfg,
         loop_entry_block_id,
         loop_exit_block_id,
+        type_table,
+        user_type_table,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -304,6 +344,8 @@ fn build_function_cfg_stmt_if(
     for single_else_if in &ast.single_else_ifs {
         check_variable_usage(
             cfg,
+            type_table,
+            user_type_table,
             symbol_reference_table,
             &single_else_if.expression,
             file,
@@ -316,6 +358,8 @@ fn build_function_cfg_stmt_if(
             cfg,
             loop_entry_block_id,
             loop_exit_block_id,
+            type_table,
+            user_type_table,
             assignment_lhs_table,
             symbol_reference_table,
             &single_else_if.body_block,
@@ -335,6 +379,8 @@ fn build_function_cfg_stmt_if(
             cfg,
             loop_entry_block_id,
             loop_exit_block_id,
+            type_table,
+            user_type_table,
             assignment_lhs_table,
             symbol_reference_table,
             &single_else.body_block,
@@ -369,6 +415,8 @@ fn build_function_cfg_stmt_if(
 fn build_function_cfg_stmt_loop(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTLoop,
@@ -384,6 +432,8 @@ fn build_function_cfg_stmt_loop(
         cfg,
         Some(entry_block_id),
         Some(exit_block.id),
+        type_table,
+        user_type_table,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -402,6 +452,8 @@ fn build_function_cfg_stmt_loop(
 fn build_function_cfg_stmt_while(
     block_id_alloc: &mut BlockIdAllocator,
     cfg: &mut FunctionControlFlowGraph,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     assignment_lhs_table: &AssignmentLhsTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTWhile,
@@ -417,6 +469,8 @@ fn build_function_cfg_stmt_while(
         cfg,
         Some(entry_block_id),
         Some(exit_block.id),
+        type_table,
+        user_type_table,
         assignment_lhs_table,
         symbol_reference_table,
         &ast.body_block,
@@ -434,6 +488,8 @@ fn build_function_cfg_stmt_while(
 
 fn check_variable_usage(
     cfg: &FunctionControlFlowGraph,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
     symbol_reference_table: &SymbolReferenceTable,
     ast: &ASTExpression,
     file: &Arc<SourceFile>,
@@ -443,6 +499,8 @@ fn check_variable_usage(
         ASTExpressionKind::Binary(expr_binary) => {
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_binary.left,
                 file,
@@ -450,6 +508,8 @@ fn check_variable_usage(
             );
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_binary.right,
                 file,
@@ -459,6 +519,8 @@ fn check_variable_usage(
         ASTExpressionKind::Unary(expr_unary) => {
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_unary.right,
                 file,
@@ -468,6 +530,8 @@ fn check_variable_usage(
         ASTExpressionKind::As(expr_as) => {
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_as.expression,
                 file,
@@ -477,6 +541,8 @@ fn check_variable_usage(
         ASTExpressionKind::Call(expr_call) => {
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_call.expression,
                 file,
@@ -486,6 +552,8 @@ fn check_variable_usage(
             for argument in &expr_call.arguments {
                 check_variable_usage(
                     cfg,
+                    type_table,
+                    user_type_table,
                     symbol_reference_table,
                     &argument.expression,
                     file,
@@ -493,9 +561,38 @@ fn check_variable_usage(
                 );
             }
         }
+        ASTExpressionKind::Member(expr_member) => {
+            let variable = pick_variable(symbol_reference_table, ast);
+            let accessed_member_seq = list_members(ast);
+
+            if !cfg.initialized_variables.contains(&variable)
+                && !cfg
+                    .partially_initialized_variables
+                    .get(&variable)
+                    .map(|members| members.contains(&accessed_member_seq))
+                    .unwrap_or_default()
+            {
+                diagnostics
+                    .send(Diagnostics {
+                        level: DiagnosticsLevel::Error,
+                        message: format!(
+                            "member {} is used before being initialized",
+                            expr_member.member.symbol
+                        ),
+                        origin: Some(DiagnosticsOrigin {
+                            file: file.clone(),
+                            span: ast.span,
+                        }),
+                        sub_diagnostics: vec![],
+                    })
+                    .unwrap();
+            }
+        }
         ASTExpressionKind::Paren(expr_paren) => {
             check_variable_usage(
                 cfg,
+                type_table,
+                user_type_table,
                 symbol_reference_table,
                 &expr_paren.expression,
                 file,
@@ -525,6 +622,154 @@ fn check_variable_usage(
                 }
             }
         }
-        ASTExpressionKind::StructLiteral(..) => {}
+        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
+            for field in &expr_struct_literal.fields {
+                check_variable_usage(
+                    cfg,
+                    type_table,
+                    user_type_table,
+                    symbol_reference_table,
+                    &field.expression,
+                    file,
+                    diagnostics,
+                );
+            }
+        }
+    }
+}
+
+fn mark_variable_as_initialized(
+    cfg: &mut FunctionControlFlowGraph,
+    type_table: &TypeTable,
+    user_type_table: &UserTypeTable,
+    assignment_lhs_table: &AssignmentLhsTable,
+    symbol_reference_table: &SymbolReferenceTable,
+    ast: &ASTExpression,
+) {
+    match &ast.kind {
+        ASTExpressionKind::Binary(_) => {}
+        ASTExpressionKind::Unary(_) => {}
+        ASTExpressionKind::As(_) => {}
+        ASTExpressionKind::Call(_) => {}
+        ASTExpressionKind::Member(expr_member) => {
+            if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&ast.id) {
+                match lhs_kind {
+                    AssignmentLhsKind::Parameter { .. } => {
+                        return;
+                    }
+                    AssignmentLhsKind::Variable { .. } => {
+                        return;
+                    }
+                    AssignmentLhsKind::Field { .. } => {
+                        let variable = pick_variable(symbol_reference_table, ast);
+                        let accessed_member_seq = list_members(ast);
+                        let accessed_member_seq_len = accessed_member_seq.len();
+
+                        let partially_initialized = cfg
+                            .partially_initialized_variables
+                            .entry(variable)
+                            .or_default();
+                        partially_initialized.insert(accessed_member_seq);
+
+                        let type_kind = match type_table.types.get(&expr_member.expression.id) {
+                            Some(type_kind) => type_kind,
+                            None => return,
+                        };
+                        let struct_symbol = if let TypeKind::UserTypeStruct { symbol } = type_kind {
+                            *symbol
+                        } else {
+                            return;
+                        };
+                        let user_type_kind = match user_type_table.lookup(struct_symbol) {
+                            Some(user_type_kind) => user_type_kind,
+                            None => return,
+                        };
+                        #[allow(unreachable_patterns)]
+                        let user_type_struct = match user_type_kind {
+                            UserTypeKind::Struct(user_type_struct) => user_type_struct,
+                            _ => return,
+                        };
+
+                        if partially_initialized
+                            .iter()
+                            .filter(|members| members.len() == accessed_member_seq_len)
+                            .count()
+                            != user_type_struct.fields.len()
+                        {
+                            return;
+                        }
+                    }
+                }
+            }
+
+            mark_variable_as_initialized(
+                cfg,
+                type_table,
+                user_type_table,
+                assignment_lhs_table,
+                symbol_reference_table,
+                &expr_member.expression,
+            );
+        }
+        ASTExpressionKind::Paren(expr_paren) => {
+            mark_variable_as_initialized(
+                cfg,
+                type_table,
+                user_type_table,
+                assignment_lhs_table,
+                symbol_reference_table,
+                &expr_paren.expression,
+            );
+        }
+        ASTExpressionKind::Literal(_) => {}
+        ASTExpressionKind::IdReference(_) => {
+            if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&ast.id) {
+                match lhs_kind {
+                    AssignmentLhsKind::Parameter { .. } => {
+                        // Parameters are always initialized.
+                    }
+                    AssignmentLhsKind::Variable { node } => {
+                        cfg.initialized_variables.insert(*node);
+                    }
+                    AssignmentLhsKind::Field { .. } => {}
+                }
+            }
+        }
+        ASTExpressionKind::StructLiteral(_) => {}
+    }
+}
+
+fn pick_variable(symbol_reference_table: &SymbolReferenceTable, ast: &ASTExpression) -> NodeId {
+    match &ast.kind {
+        ASTExpressionKind::Member(expr_member) => {
+            pick_variable(symbol_reference_table, &expr_member.expression)
+        }
+        ASTExpressionKind::Paren(expr_paren) => {
+            pick_variable(symbol_reference_table, &expr_paren.expression)
+        }
+        ASTExpressionKind::IdReference(expr_id_ref) => {
+            if let Some(symbol_reference) = symbol_reference_table.references.get(&expr_id_ref.id) {
+                if symbol_reference.kind.is_variable() {
+                    return symbol_reference.node;
+                }
+            }
+            unreachable!()
+        }
+        _ => unreachable!(),
+    }
+}
+
+fn list_members(ast: &ASTExpression) -> Vec<Symbol> {
+    match &ast.kind {
+        ASTExpressionKind::Member(expr_member) => {
+            let mut members = list_members(&expr_member.expression);
+            members.push(expr_member.member.symbol);
+            members
+        }
+        ASTExpressionKind::Paren(expr_paren) => list_members(&expr_paren.expression),
+        ASTExpressionKind::IdReference(_) => {
+            vec![]
+        }
+        _ => unreachable!(),
     }
 }

@@ -41,7 +41,7 @@ impl Context {
             &ast,
         );
 
-        let type_table = type_table_builder.resolve();
+        let type_table = type_table_builder.resolve(&user_type_table, &type_reference_table);
 
         check_types(
             &type_table,
@@ -54,6 +54,8 @@ impl Context {
 
         check_control_flow(
             &function_table,
+            &type_table,
+            &user_type_table,
             &assignment_lhs_table,
             &symbol_reference_table,
             &ast,

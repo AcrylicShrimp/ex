@@ -3,6 +3,7 @@ use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 use ex_parser::NodeId;
 use ex_resolve_ref::Function;
 use ex_span::{SourceFile, Span};
+use ex_symbol::Symbol;
 use std::{
     collections::{HashMap, HashSet},
     sync::{mpsc::Sender, Arc},
@@ -13,6 +14,7 @@ pub struct FunctionControlFlowGraph {
     pub node: NodeId,
     pub span: Span,
     pub initialized_variables: HashSet<NodeId>,
+    pub partially_initialized_variables: HashMap<NodeId, HashSet<Vec<Symbol>>>,
     pub entry_block: BlockId,
     pub exit_block: Option<BlockId>,
     pub blocks: HashMap<BlockId, BasicBlock>,
@@ -29,6 +31,7 @@ impl FunctionControlFlowGraph {
             node,
             span,
             initialized_variables: Default::default(),
+            partially_initialized_variables: Default::default(),
             entry_block: entry_block_id,
             exit_block: None,
             blocks,

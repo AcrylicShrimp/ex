@@ -1,4 +1,4 @@
-use ex_codegen::TypeId;
+use ex_codegen::{Program, TypeId, TypeKind};
 use ex_symbol::Symbol;
 use std::fmt::Display;
 
@@ -14,6 +14,25 @@ pub enum Value {
 }
 
 impl Value {
+    pub fn empty_from_type_id(program: &Program, type_id: TypeId) -> Self {
+        match &program.type_table.types[&type_id] {
+            TypeKind::Empty => Value::Empty,
+            TypeKind::Boolean => Value::Empty,
+            TypeKind::Integer => Value::Empty,
+            TypeKind::Float => Value::Empty,
+            TypeKind::String => Value::Empty,
+            TypeKind::Callable { .. } => Value::Empty,
+            TypeKind::UserTypeStruct { symbol } => {
+                let fields = program.user_type_struct_table[symbol].fields.clone();
+                let values = fields
+                    .iter()
+                    .map(|field| Value::empty_from_type_id(program, field.type_id))
+                    .collect();
+                Value::Struct(type_id, values)
+            }
+        }
+    }
+
     pub fn as_bool(&self) -> bool {
         match self {
             Value::Boolean(value) => *value,
@@ -51,7 +70,14 @@ impl Value {
 
     pub fn as_struct(&self) -> (TypeId, &Vec<Value>) {
         match self {
-            Value::Struct(type_id, fields) => (*type_id, &fields),
+            Value::Struct(type_id, fields) => (*type_id, fields),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn as_struct_mut(&mut self) -> (TypeId, &mut Vec<Value>) {
+        match self {
+            Value::Struct(type_id, fields) => (*type_id, fields),
             _ => unreachable!(),
         }
     }

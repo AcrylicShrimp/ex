@@ -14,14 +14,23 @@ impl Instruction {
 
 #[derive(Debug, Clone, Hash)]
 pub enum InstructionKind {
+    Load {
+        pointer: Pointer,
+        temporary: TemporaryId,
+    },
     Store {
-        variable: VariableId,
+        pointer: Pointer,
         temporary: TemporaryId,
         operator: Option<AssignmentOperator>,
     },
     Assign {
         temporary: TemporaryId,
         expression: Expression,
+    },
+    Extract {
+        from: TemporaryId,
+        indices: Vec<usize>,
+        temporary: TemporaryId,
     },
     Jump {
         block: BlockId,
@@ -40,13 +49,17 @@ pub enum InstructionKind {
 }
 
 impl InstructionKind {
+    pub fn load(pointer: Pointer, temporary: TemporaryId) -> Self {
+        Self::Load { pointer, temporary }
+    }
+
     pub fn store(
-        variable: VariableId,
+        pointer: Pointer,
         temporary: TemporaryId,
         operator: Option<AssignmentOperator>,
     ) -> Self {
         Self::Store {
-            variable,
+            pointer,
             temporary,
             operator,
         }
@@ -56,6 +69,14 @@ impl InstructionKind {
         Self::Assign {
             temporary,
             expression,
+        }
+    }
+
+    pub fn extract(from: TemporaryId, indices: Vec<usize>, temporary: TemporaryId) -> Self {
+        Self::Extract {
+            from,
+            indices,
+            temporary,
         }
     }
 
@@ -81,6 +102,18 @@ impl InstructionKind {
 
     pub fn terminate(temporary: Option<TemporaryId>) -> Self {
         Self::Terminate { temporary }
+    }
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct Pointer {
+    pub variable: VariableId,
+    pub indices: Vec<usize>,
+}
+
+impl Pointer {
+    pub fn new(variable: VariableId, indices: Vec<usize>) -> Self {
+        Self { variable, indices }
     }
 }
 

@@ -375,7 +375,7 @@ pub fn check_types_stmt_block(
                     type_table,
                     type_reference_table,
                     user_type_table,
-                    &stmt_assignment.left.expression,
+                    &stmt_assignment.left,
                     file,
                     diagnostics,
                 );
@@ -389,7 +389,7 @@ pub fn check_types_stmt_block(
                 );
 
                 match (
-                    type_table.types.get(&stmt_assignment.left.expression.id),
+                    type_table.types.get(&stmt_assignment.left.id),
                     type_table.types.get(&stmt_assignment.right.id),
                 ) {
                     (Some(left_type_kind), Some(right_type_kind)) => {
@@ -552,6 +552,68 @@ pub fn check_types_expression(
                                 origin: Some(DiagnosticsOrigin {
                                     file: file.clone(),
                                     span: expr_call.expression.span,
+                                }),
+                                sub_diagnostics: vec![],
+                            })
+                            .unwrap();
+                    }
+                }
+            }
+        }
+        ASTExpressionKind::Member(expr_member) => {
+            check_types_expression(
+                type_table,
+                type_reference_table,
+                user_type_table,
+                &expr_member.expression,
+                file,
+                diagnostics,
+            );
+
+            if let Some(base_type_kind) = type_table.types.get(&expr_member.expression.id) {
+                match base_type_kind {
+                    TypeKind::UserTypeStruct { symbol } => {
+                        let user_type_struct = user_type_table.lookup(*symbol).unwrap().as_struct();
+                        if user_type_struct
+                            .fields
+                            .iter()
+                            .find(|field| field.symbol == expr_member.member.symbol)
+                            .is_none()
+                        {
+                            diagnostics
+                                .send(Diagnostics {
+                                    level: DiagnosticsLevel::Error,
+                                    message: format!(
+                                        "struct {} does not have a field named {}",
+                                        symbol, expr_member.member.symbol
+                                    ),
+                                    origin: Some(DiagnosticsOrigin {
+                                        file: file.clone(),
+                                        span: expr_member.expression.span,
+                                    }),
+                                    sub_diagnostics: vec![SubDiagnostics {
+                                        level: DiagnosticsLevel::Hint,
+                                        message: format!("struct defined here"),
+                                        origin: Some(DiagnosticsOrigin {
+                                            file: file.clone(),
+                                            span: user_type_struct.span,
+                                        }),
+                                    }],
+                                })
+                                .unwrap();
+                        }
+                    }
+                    _ => {
+                        diagnostics
+                            .send(Diagnostics {
+                                level: DiagnosticsLevel::Error,
+                                message: format!(
+                                    "expected a struct type, found `{}`",
+                                    base_type_kind
+                                ),
+                                origin: Some(DiagnosticsOrigin {
+                                    file: file.clone(),
+                                    span: expr_member.expression.span,
                                 }),
                                 sub_diagnostics: vec![],
                             })
@@ -929,7 +991,7 @@ fn propagate_type_variables_stmt_block(
                     user_type_table,
                     symbol_reference_table,
                     type_reference_table,
-                    &stmt_assignment.left.expression,
+                    &stmt_assignment.left,
                 );
                 let right_type_var = propagate_type_variables_expression(
                     type_table_builder,
@@ -1073,6 +1135,25 @@ fn propagate_type_variables_expression(
                         ),
                     ));
             }
+        }
+        ASTExpressionKind::Member(expr_member) => {
+            let base_type_var = propagate_type_variables_expression(
+                type_table_builder,
+                function_table,
+                user_type_table,
+                symbol_reference_table,
+                type_reference_table,
+                &expr_member.expression,
+            );
+            type_table_builder
+                .variable_constraints
+                .push(TypeVariableConstraint::equal(
+                    type_var,
+                    TypeVariableConstraintOperand::member_type(
+                        base_type_var,
+                        expr_member.member.symbol,
+                    ),
+                ));
         }
         ASTExpressionKind::Paren(expr_paren) => {
             let expression_type_var = propagate_type_variables_expression(

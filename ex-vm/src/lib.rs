@@ -22,7 +22,7 @@ pub fn execute(program: &Program) {
 }
 
 fn execute_function(program: &Program, function: &Function, arguments: Vec<Value>) -> Value {
-    if function.name == Symbol::from_str("print") {
+    if function.name.to_str().starts_with("__print_") {
         println!(
             "{}",
             arguments
@@ -34,7 +34,15 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
         return Value::Empty;
     }
 
-    let mut stack: HashMap<VariableId, Value> = HashMap::new();
+    let mut stack: HashMap<VariableId, Value> =
+        HashMap::from_iter(function.variable_table.variables.iter().map(
+            |(variable_id, variable)| {
+                (
+                    *variable_id,
+                    Value::empty_from_type_id(program, variable.type_id),
+                )
+            },
+        ));
     let mut temp_stack: HashMap<TemporaryId, Value> = HashMap::new();
 
     for (index, argument) in arguments.into_iter().enumerate() {
@@ -48,148 +56,203 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
         for instruction in &basic_block.instructions {
             let instruction = &basic_block.instruction_table.instructions[instruction];
             match &instruction.kind {
+                InstructionKind::Load { pointer, temporary } => {
+                    if pointer.indices.is_empty() {
+                        temp_stack.insert(*temporary, stack[&pointer.variable].clone());
+                    } else {
+                        let mut variable =
+                            stack.get_mut(&pointer.variable).unwrap().as_struct_mut().1;
+
+                        for index in &pointer.indices[..pointer.indices.len() - 1] {
+                            variable = variable[*index].as_struct_mut().1;
+                        }
+
+                        temp_stack.insert(
+                            *temporary,
+                            variable[pointer.indices[pointer.indices.len() - 1]].clone(),
+                        );
+                    }
+                }
                 InstructionKind::Store {
-                    variable,
+                    pointer,
                     temporary,
                     operator,
                 } => {
-                    let temporary = &temp_stack[temporary];
-                    let temporary = match operator {
-                        Some(operator) => {
-                            let variable = &stack[variable];
-                            match (operator, variable, temporary) {
-                                (
-                                    AssignmentOperator::Add,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left + *right),
-                                (
-                                    AssignmentOperator::Add,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(*left + *right),
-                                (
-                                    AssignmentOperator::Add,
-                                    Value::String(left),
-                                    Value::String(right),
-                                ) => Value::String(format!("{}{}", left, right)),
-                                (
-                                    AssignmentOperator::Sub,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left - *right),
-                                (
-                                    AssignmentOperator::Sub,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(*left - *right),
-                                (
-                                    AssignmentOperator::Mul,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left * *right),
-                                (
-                                    AssignmentOperator::Mul,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(*left * *right),
-                                (
-                                    AssignmentOperator::Mul,
-                                    Value::String(left),
-                                    Value::Integer(right),
-                                ) => Value::String(left.repeat(*right as usize)),
-                                (
-                                    AssignmentOperator::Mul,
-                                    Value::Integer(left),
-                                    Value::String(right),
-                                ) => Value::String(right.repeat(*left as usize)),
-                                (
-                                    AssignmentOperator::Div,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left / *right),
-                                (
-                                    AssignmentOperator::Div,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(*left / *right),
-                                (
-                                    AssignmentOperator::Mod,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left % *right),
-                                (
-                                    AssignmentOperator::Mod,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(*left % *right),
-                                (
-                                    AssignmentOperator::Pow,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(left.pow(*right as u32)),
-                                (
-                                    AssignmentOperator::Pow,
-                                    Value::Float(left),
-                                    Value::Float(right),
-                                ) => Value::Float(left.powf(*right)),
-                                (
-                                    AssignmentOperator::Shl,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left << *right),
-                                (
-                                    AssignmentOperator::Shr,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left >> *right),
-                                (
-                                    AssignmentOperator::BitOr,
-                                    Value::Boolean(left),
-                                    Value::Boolean(right),
-                                ) => Value::Boolean(*left || *right),
-                                (
-                                    AssignmentOperator::BitOr,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left | *right),
-                                (
-                                    AssignmentOperator::BitAnd,
-                                    Value::Boolean(left),
-                                    Value::Boolean(right),
-                                ) => Value::Boolean(*left && *right),
-                                (
-                                    AssignmentOperator::BitAnd,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left & *right),
-                                (
-                                    AssignmentOperator::BitXor,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left ^ *right),
-                                (AssignmentOperator::BitNot, _, Value::Boolean(right)) => {
-                                    Value::Boolean(!*right)
-                                }
-                                (
-                                    AssignmentOperator::BitNot,
-                                    Value::Integer(left),
-                                    Value::Integer(right),
-                                ) => Value::Integer(*left & *right),
-                                _ => unreachable!(),
-                            }
-                        }
-                        None => temporary.clone(),
-                    };
+                    let variable = if pointer.indices.is_empty() {
+                        stack.get_mut(&pointer.variable).unwrap()
+                    } else {
+                        let mut variable =
+                            stack.get_mut(&pointer.variable).unwrap().as_struct_mut().1;
 
-                    stack.insert(*variable, temporary);
+                        for index in &pointer.indices[..pointer.indices.len() - 1] {
+                            variable = variable[*index].as_struct_mut().1;
+                        }
+
+                        &mut variable[pointer.indices[pointer.indices.len() - 1]]
+                    };
+                    let temporary = &temp_stack[temporary];
+                    match operator {
+                        Some(operator) => match (operator, variable, temporary) {
+                            (
+                                AssignmentOperator::Add,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left += right;
+                            }
+                            (AssignmentOperator::Add, Value::Float(left), Value::Float(right)) => {
+                                *left += right;
+                            }
+                            (
+                                AssignmentOperator::Add,
+                                Value::String(left),
+                                Value::String(right),
+                            ) => {
+                                left.push_str(right);
+                            }
+                            (
+                                AssignmentOperator::Sub,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left -= right;
+                            }
+                            (AssignmentOperator::Sub, Value::Float(left), Value::Float(right)) => {
+                                *left -= right;
+                            }
+                            (
+                                AssignmentOperator::Mul,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left *= right;
+                            }
+                            (AssignmentOperator::Mul, Value::Float(left), Value::Float(right)) => {
+                                *left *= right;
+                            }
+                            (
+                                AssignmentOperator::Mul,
+                                Value::String(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left = left.repeat(*right as usize);
+                            }
+                            (
+                                AssignmentOperator::Div,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left /= right;
+                            }
+                            (AssignmentOperator::Div, Value::Float(left), Value::Float(right)) => {
+                                *left /= right;
+                            }
+                            (
+                                AssignmentOperator::Mod,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left %= right;
+                            }
+                            (AssignmentOperator::Mod, Value::Float(left), Value::Float(right)) => {
+                                *left %= right;
+                            }
+                            (
+                                AssignmentOperator::Pow,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left = left.pow(*right as u32);
+                            }
+                            (AssignmentOperator::Pow, Value::Float(left), Value::Float(right)) => {
+                                *left = left.powf(*right);
+                            }
+                            (
+                                AssignmentOperator::Shl,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left <<= right;
+                            }
+                            (
+                                AssignmentOperator::Shr,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left >>= right;
+                            }
+                            (
+                                AssignmentOperator::BitOr,
+                                Value::Boolean(left),
+                                Value::Boolean(right),
+                            ) => {
+                                *left |= right;
+                            }
+                            (
+                                AssignmentOperator::BitOr,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left |= right;
+                            }
+                            (
+                                AssignmentOperator::BitAnd,
+                                Value::Boolean(left),
+                                Value::Boolean(right),
+                            ) => {
+                                *left &= right;
+                            }
+                            (
+                                AssignmentOperator::BitAnd,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left &= right;
+                            }
+                            (
+                                AssignmentOperator::BitXor,
+                                Value::Boolean(left),
+                                Value::Boolean(right),
+                            ) => {
+                                *left ^= right;
+                            }
+                            (
+                                AssignmentOperator::BitXor,
+                                Value::Integer(left),
+                                Value::Integer(right),
+                            ) => {
+                                *left ^= right;
+                            }
+                            _ => unreachable!(),
+                        },
+                        None => {
+                            *variable = temporary.clone();
+                        }
+                    };
                 }
                 InstructionKind::Assign {
                     temporary,
                     expression,
                 } => {
-                    let value = eval_expression(program, &stack, &temp_stack, expression);
+                    let value = eval_expression(program, &temp_stack, expression);
                     temp_stack.insert(*temporary, value);
+                }
+                InstructionKind::Extract {
+                    from,
+                    indices,
+                    temporary,
+                } => {
+                    if indices.is_empty() {
+                        temp_stack.insert(*temporary, temp_stack[from].clone());
+                    } else {
+                        let mut value = temp_stack[from].clone();
+
+                        for index in indices {
+                            value = value.as_struct().1[*index].clone();
+                        }
+
+                        temp_stack.insert(*temporary, value);
+                    }
                 }
                 InstructionKind::Jump { block, arguments } => {
                     let next_block = &function.block_table.blocks[block];
@@ -253,7 +316,6 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
 
 fn eval_expression(
     program: &Program,
-    stack: &HashMap<VariableId, Value>,
     temp_stack: &HashMap<TemporaryId, Value>,
     expression: &Expression,
 ) -> Value {
@@ -495,8 +557,6 @@ fn eval_expression(
                 .collect();
             Value::Struct(*struct_type, fields)
         }
-        ExpressionKind::Variable { variable } => stack[variable].clone(),
         ExpressionKind::Function { function } => Value::Callable(function.clone()),
-        ExpressionKind::Temporary { temporary } => temp_stack[temporary].clone(),
     }
 }

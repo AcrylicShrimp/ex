@@ -1,6 +1,7 @@
 use crate::{TypeTable, BUILT_IN_BINARY_OPERATOR, BUILT_IN_UNARY_OPERATOR};
 use ex_parser::{ASTBinaryOperatorKind, ASTUnaryOperatorKind, NodeId};
-use ex_resolve_ref::TypeKind;
+use ex_resolve_ref::{TypeKind, TypeReferenceTable, UserTypeTable};
+use ex_symbol::Symbol;
 use std::{
     collections::{HashMap, HashSet},
     num::NonZeroU64,
@@ -27,7 +28,11 @@ impl TypeTableBuilder {
         variable
     }
 
-    pub fn resolve(mut self) -> TypeTable {
+    pub fn resolve(
+        mut self,
+        user_type_table: &UserTypeTable,
+        type_reference_table: &TypeReferenceTable,
+    ) -> TypeTable {
         // println!("{:#?}", self.variable_constraints);
 
         // 1. Collect all equalities.
@@ -152,9 +157,13 @@ impl TypeTableBuilder {
                 }
 
                 let variable = &constraint.from;
-                let type_kind = if let Some(type_kind) =
-                    extract_type_kind(&self.reverse_variables, &type_table, &constraint.to)
-                {
+                let type_kind = if let Some(type_kind) = extract_type_kind(
+                    user_type_table,
+                    type_reference_table,
+                    &self.reverse_variables,
+                    &type_table,
+                    &constraint.to,
+                ) {
                     type_kind
                 } else {
                     return true;
@@ -199,9 +208,13 @@ impl TypeTableBuilder {
                     .count()
                     == 0
                 {
-                    if let Some(type_kind) =
-                        extract_type_kind(&self.reverse_variables, &type_table, &constraint.to)
-                    {
+                    if let Some(type_kind) = extract_type_kind(
+                        user_type_table,
+                        type_reference_table,
+                        &self.reverse_variables,
+                        &type_table,
+                        &constraint.to,
+                    ) {
                         unions.entry(from.clone()).or_default().push(type_kind);
                         indices.insert(index);
                     }
@@ -268,6 +281,8 @@ impl TypeTableBuilder {
 }
 
 fn extract_type_kind(
+    user_type_table: &UserTypeTable,
+    type_reference_table: &TypeReferenceTable,
     reverse_variables: &HashMap<TypeVariable, NodeId>,
     type_table: &TypeTable,
     operand: &TypeVariableConstraintOperand,
@@ -328,6 +343,28 @@ fn extract_type_kind(
                         .get(*index)
                         .cloned()
                         .unwrap_or_else(|| TypeKind::unknown()),
+                    _ => TypeKind::unknown(),
+                }),
+                _ => None,
+            }
+        }
+        TypeVariableConstraintOperand::MemberType { variable, name } => {
+            match type_table.types.get(&reverse_variables[variable]) {
+                Some(member_type_kind) => Some(match member_type_kind {
+                    TypeKind::UserTypeStruct { symbol } => {
+                        let user_type_struct = user_type_table.lookup(*symbol).unwrap().as_struct();
+                        user_type_struct
+                            .fields
+                            .iter()
+                            .position(|field| field.symbol == *name)
+                            .map(|index| {
+                                type_reference_table.references
+                                    [&user_type_struct.fields_typenames[index].id]
+                                    .kind
+                                    .clone()
+                            })
+                            .unwrap_or_else(|| TypeKind::unknown())
+                    }
                     _ => TypeKind::unknown(),
                 }),
                 _ => None,
@@ -412,6 +449,10 @@ pub enum TypeVariableConstraintOperand {
         variable: TypeVariable,
         index: usize,
     },
+    MemberType {
+        variable: TypeVariable,
+        name: Symbol,
+    },
 }
 
 impl TypeVariableConstraintOperand {
@@ -447,6 +488,10 @@ impl TypeVariableConstraintOperand {
         Self::CallableParameterType { variable, index }
     }
 
+    pub fn member_type(variable: TypeVariable, name: Symbol) -> Self {
+        Self::MemberType { variable, name }
+    }
+
     pub fn is_concrete(&self) -> bool {
         matches!(self, Self::Concrete { .. })
     }
@@ -469,5 +514,9 @@ impl TypeVariableConstraintOperand {
 
     pub fn is_callable_parameter_type(&self) -> bool {
         matches!(self, Self::CallableParameterType { .. })
+    }
+
+    pub fn is_member_type(&self) -> bool {
+        matches!(self, Self::MemberType { .. })
     }
 }

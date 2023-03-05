@@ -913,11 +913,6 @@ fn parse_assignment_or_row(
         });
     };
 
-    let left = ASTAssignmentLeft {
-        span: left.span,
-        id: id_alloc.allocate(),
-        expression: left,
-    };
     let right = parse_expression(true, id_alloc, parser, file, diagnostics)?;
 
     let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
@@ -1342,8 +1337,13 @@ fn parse_as_expression(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<ASTExpression, ()> {
-    let mut left =
-        parse_call_expression(allow_struct_literal, id_alloc, parser, file, diagnostics)?;
+    let mut left = parse_call_expression_or_member_access(
+        allow_struct_literal,
+        id_alloc,
+        parser,
+        file,
+        diagnostics,
+    )?;
 
     while parser.is_exists() {
         let keyword_as = if let Some(id) = parser.first().keyword(*crate::KEYWORD_AS) {
@@ -1372,7 +1372,7 @@ fn parse_as_expression(
     Ok(left)
 }
 
-fn parse_call_expression(
+fn parse_call_expression_or_member_access(
     allow_struct_literal: bool,
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
@@ -1383,36 +1383,69 @@ fn parse_call_expression(
         parse_single_expression(allow_struct_literal, id_alloc, parser, file, diagnostics)?;
 
     while parser.is_exists() {
-        let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
-            parser.consume();
-            id
+        if parser.first().is_kind(TokenKind::Dot) && parser.second().is_id() {
+            let dot = if let Some(id) = parser.first().kind(TokenKind::Dot) {
+                parser.consume();
+                id
+            } else {
+                unexpected_token(parser.first(), &[*crate::DOT], file, diagnostics);
+                return Err(());
+            };
+
+            let member = if let Some(id) = parser.first().id() {
+                parser.consume();
+                id
+            } else {
+                unexpected_token(parser.first(), &[*crate::ID], file, diagnostics);
+                return Err(());
+            };
+
+            let span = dot.span.to(member.span);
+
+            left = ASTExpression {
+                id: id_alloc.allocate(),
+                kind: ASTExpressionKind::Member(ASTMemberExpression {
+                    expression: Box::new(left),
+                    dot,
+                    member,
+                    span,
+                }),
+                span,
+            };
+        } else if parser.first().is_kind(TokenKind::OpenParen) {
+            let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
+                parser.consume();
+                id
+            } else {
+                break;
+            };
+
+            let arguments = parse_call_arguments(id_alloc, parser, file, diagnostics)?;
+
+            let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
+                parser.consume();
+                id
+            } else {
+                unexpected_token(parser.first(), &[*crate::CLOSE_PAREN], file, diagnostics);
+                return Err(());
+            };
+
+            let span = left.span.to(paren_close.span);
+
+            left = ASTExpression {
+                id: id_alloc.allocate(),
+                kind: ASTExpressionKind::Call(ASTCallExpression {
+                    expression: Box::new(left),
+                    paren_open,
+                    arguments,
+                    paren_close,
+                    span,
+                }),
+                span,
+            };
         } else {
             break;
-        };
-
-        let arguments = parse_call_arguments(id_alloc, parser, file, diagnostics)?;
-
-        let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
-            parser.consume();
-            id
-        } else {
-            unexpected_token(parser.first(), &[*crate::CLOSE_PAREN], file, diagnostics);
-            return Err(());
-        };
-
-        let span = left.span.to(paren_close.span);
-
-        left = ASTExpression {
-            id: id_alloc.allocate(),
-            kind: ASTExpressionKind::Call(ASTCallExpression {
-                expression: Box::new(left),
-                paren_open,
-                arguments,
-                paren_close,
-                span,
-            }),
-            span,
-        };
+        }
     }
 
     Ok(left)
@@ -1488,6 +1521,40 @@ fn parse_single_expression(
         );
         Err(())
     }
+}
+
+fn parse_paren_expression(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<ASTParenExpression, ()> {
+    let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::OPEN_PAREN], file, diagnostics);
+        return Err(());
+    };
+
+    let expression = parse_expression(true, id_alloc, parser, file, diagnostics)?;
+
+    let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
+        parser.consume();
+        id
+    } else {
+        unexpected_token(parser.first(), &[*crate::CLOSE_PAREN], file, diagnostics);
+        return Err(());
+    };
+
+    let span = paren_open.span.to(paren_close.span);
+
+    Ok(ASTParenExpression {
+        paren_open,
+        expression: Box::new(expression),
+        paren_close,
+        span,
+    })
 }
 
 fn parse_id_reference_or_struct_literal(
@@ -1623,40 +1690,6 @@ fn parse_struct_literal_fields(
     }
 
     Ok(fields)
-}
-
-fn parse_paren_expression(
-    id_alloc: &mut NodeIdAllocator,
-    parser: &mut Parser<impl Iterator<Item = Token>>,
-    file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
-) -> Result<ASTParenExpression, ()> {
-    let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
-        parser.consume();
-        id
-    } else {
-        unexpected_token(parser.first(), &[*crate::OPEN_PAREN], file, diagnostics);
-        return Err(());
-    };
-
-    let expression = parse_expression(true, id_alloc, parser, file, diagnostics)?;
-
-    let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
-        parser.consume();
-        id
-    } else {
-        unexpected_token(parser.first(), &[*crate::CLOSE_PAREN], file, diagnostics);
-        return Err(());
-    };
-
-    let span = paren_open.span.to(paren_close.span);
-
-    Ok(ASTParenExpression {
-        paren_open,
-        expression: Box::new(expression),
-        paren_close,
-        span,
-    })
 }
 
 fn parse_typename(

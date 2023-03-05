@@ -16,3 +16,12 @@ pub enum TypeKind {
         symbol: Symbol,
     },
 }
+
+impl TypeKind {
+    pub fn as_user_type_struct(&self) -> Symbol {
+        match self {
+            TypeKind::UserTypeStruct { symbol } => *symbol,
+            _ => unreachable!(),
+        }
+    }
+}

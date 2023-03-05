@@ -140,6 +140,7 @@ dependencies = [
  "ex-resolve-ref",
  "ex-span",
  "ex-symbol",
+ "ex-type-checking",
 ]
 
 [[package]]
