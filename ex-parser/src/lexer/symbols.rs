@@ -78,4 +78,6 @@ lazy_static! {
     pub static ref TYPENAME_INT: Symbol = Symbol::from_str("int");
     pub static ref TYPENAME_FLOAT: Symbol = Symbol::from_str("float");
     pub static ref TYPENAME_STRING: Symbol = Symbol::from_str("string");
+    pub static ref TYPENAME_PTR: Symbol = Symbol::from_str("ptr");
+    pub static ref TYPENAME_REF: Symbol = Symbol::from_str("ref");
 }

@@ -1090,6 +1090,12 @@ fn type_kind_to_type_id(type_table: &mut TypeTable, type_kind: &NodeTypeKind) ->
             return_type: type_kind_to_type_id(type_table, return_type),
         },
         NodeTypeKind::UserTypeStruct { symbol } => TypeKind::UserTypeStruct { symbol: *symbol },
+        NodeTypeKind::Pointer { type_kind } => TypeKind::Pointer {
+            type_id: type_kind_to_type_id(type_table, type_kind),
+        },
+        NodeTypeKind::Reference { type_kind } => TypeKind::Reference {
+            type_id: type_kind_to_type_id(type_table, type_kind),
+        },
     };
     type_table.insert(type_kind)
 }

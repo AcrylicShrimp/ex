@@ -1344,6 +1344,16 @@ fn resolve_type_kind(
                 })
                 .unwrap_or_else(|| TypeKind::empty()),
         ),
+        TypenameKind::Pointer(pointer) => {
+            let type_kind =
+                resolve_type_kind(user_type_table, &pointer.typename, file, diagnostics);
+            TypeKind::pointer(type_kind)
+        }
+        TypenameKind::Reference(reference) => {
+            let type_kind =
+                resolve_type_kind(user_type_table, &reference.typename, file, diagnostics);
+            TypeKind::reference(type_kind)
+        }
     }
 }
 

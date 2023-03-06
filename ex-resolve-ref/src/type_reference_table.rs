@@ -41,6 +41,12 @@ pub enum TypeKind {
     UserTypeStruct {
         symbol: Symbol,
     },
+    Pointer {
+        type_kind: Box<TypeKind>,
+    },
+    Reference {
+        type_kind: Box<TypeKind>,
+    },
 }
 
 impl TypeKind {
@@ -79,6 +85,18 @@ impl TypeKind {
         Self::UserTypeStruct { symbol }
     }
 
+    pub fn pointer(type_kind: TypeKind) -> Self {
+        Self::Pointer {
+            type_kind: Box::new(type_kind),
+        }
+    }
+
+    pub fn reference(type_kind: TypeKind) -> Self {
+        Self::Reference {
+            type_kind: Box::new(type_kind),
+        }
+    }
+
     pub fn is_unknown(&self) -> bool {
         matches!(self, Self::Unknown)
     }
@@ -110,6 +128,14 @@ impl TypeKind {
     pub fn is_user_type_struct(&self) -> bool {
         matches!(self, Self::UserTypeStruct { .. })
     }
+
+    pub fn is_pointer(&self) -> bool {
+        matches!(self, Self::Pointer { .. })
+    }
+
+    pub fn is_reference(&self) -> bool {
+        matches!(self, Self::Reference { .. })
+    }
 }
 
 impl Display for TypeKind {
@@ -139,6 +165,12 @@ impl Display for TypeKind {
             }
             TypeKind::UserTypeStruct { symbol } => {
                 write!(f, "struct {}", symbol)
+            }
+            TypeKind::Pointer { type_kind } => {
+                write!(f, "{} ptr", type_kind)
+            }
+            TypeKind::Reference { type_kind } => {
+                write!(f, "{} ref", type_kind)
             }
         }
     }

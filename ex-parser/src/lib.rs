@@ -1698,6 +1698,72 @@ fn parse_typename(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) -> Result<Typename, ()> {
+    let mut typename = parse_ptr_typename(id_alloc, parser, file, diagnostics)?;
+
+    while parser.is_exists() && parser.first().is_keyword(*crate::TYPENAME_REF) {
+        let keyword_ref = if let Some(id) = parser.first().keyword(*crate::TYPENAME_REF) {
+            parser.consume();
+            id
+        } else {
+            unexpected_token(parser.first(), &[*crate::TYPENAME_REF], file, diagnostics);
+            return Err(());
+        };
+
+        let span = typename.span.to(keyword_ref.span);
+
+        typename = Typename {
+            id: id_alloc.allocate(),
+            kind: TypenameKind::Reference(TypenameReference {
+                typename: Box::new(typename),
+                keyword_ref,
+                span,
+            }),
+            span,
+        };
+    }
+
+    Ok(typename)
+}
+
+fn parse_ptr_typename(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<Typename, ()> {
+    let mut typename = parse_simple_typename(id_alloc, parser, file, diagnostics)?;
+
+    while parser.is_exists() && parser.first().is_keyword(*crate::TYPENAME_PTR) {
+        let keyword_ptr = if let Some(id) = parser.first().keyword(*crate::TYPENAME_PTR) {
+            parser.consume();
+            id
+        } else {
+            unexpected_token(parser.first(), &[*crate::TYPENAME_PTR], file, diagnostics);
+            return Err(());
+        };
+
+        let span = typename.span.to(keyword_ptr.span);
+
+        typename = Typename {
+            id: id_alloc.allocate(),
+            kind: TypenameKind::Pointer(TypenamePointer {
+                typename: Box::new(typename),
+                keyword_ptr,
+                span,
+            }),
+            span,
+        };
+    }
+
+    Ok(typename)
+}
+
+fn parse_simple_typename(
+    id_alloc: &mut NodeIdAllocator,
+    parser: &mut Parser<impl Iterator<Item = Token>>,
+    file: &Arc<SourceFile>,
+    diagnostics: &Sender<Diagnostics>,
+) -> Result<Typename, ()> {
     if parser.first().is_keyword(*crate::KEYWORD_FN) {
         let function = parse_typename_function(id_alloc, parser, file, diagnostics)?;
         Ok(Typename {

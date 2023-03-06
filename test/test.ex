@@ -44,6 +44,8 @@ fn fib(n: int) -> int {
 }
 
 fn main() {
+  let p: int ptr;
+
   let test = foo();
   __print_test(test);
   # __print_bool(test.foo);
@@ -57,7 +59,7 @@ fn main() {
   test2.foo = true;
   (test2.foo) = test2.foo;
   test2.bar = 404;
-  # test2.baz = 4.4;
+  test2.baz = 4.4;
   test2.bazz = "Hi, this is a test";
 
   __print_test(test2);

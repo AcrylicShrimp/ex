@@ -11,6 +11,8 @@ pub enum Value {
     String(String),
     Callable(Symbol),
     Struct(TypeId, Vec<Value>),
+    Pointer(usize),
+    Reference(usize),
 }
 
 impl Value {
@@ -30,6 +32,8 @@ impl Value {
                     .collect();
                 Value::Struct(type_id, values)
             }
+            TypeKind::Pointer { .. } => Value::Empty,
+            TypeKind::Reference { .. } => Value::Empty,
         }
     }
 
@@ -102,6 +106,8 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
+            Value::Pointer(ptr) => write!(f, "ptr {}", ptr),
+            Value::Reference(ptr) => write!(f, "ref {}", ptr),
         }
     }
 }

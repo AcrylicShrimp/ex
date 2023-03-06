@@ -19,6 +19,8 @@ pub struct Typename {
 pub enum TypenameKind {
     Id(Id),
     Function(TypenameFunction),
+    Pointer(TypenamePointer),
+    Reference(TypenameReference),
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -28,6 +30,20 @@ pub struct TypenameFunction {
     pub parameters: Vec<TypenameFunctionParameter>,
     pub paren_close: Id,
     pub return_type: Option<TypenameFunctionReturnType>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct TypenamePointer {
+    pub typename: Box<Typename>,
+    pub keyword_ptr: Id,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct TypenameReference {
+    pub typename: Box<Typename>,
+    pub keyword_ref: Id,
     pub span: Span,
 }
 

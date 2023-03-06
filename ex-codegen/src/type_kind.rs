@@ -15,6 +15,12 @@ pub enum TypeKind {
     UserTypeStruct {
         symbol: Symbol,
     },
+    Pointer {
+        type_id: TypeId,
+    },
+    Reference {
+        type_id: TypeId,
+    },
 }
 
 impl TypeKind {
