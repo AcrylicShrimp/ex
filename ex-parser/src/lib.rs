@@ -1310,6 +1310,12 @@ fn parse_unary_expression(
     } else if let Some(id) = parser.first().kind(TokenKind::LogNot) {
         parser.consume();
         (id, ASTUnaryOperatorKind::LogNot)
+    } else if let Some(id) = parser.first().kind(TokenKind::BitAnd) {
+        parser.consume();
+        (id, ASTUnaryOperatorKind::AddressOf)
+    } else if let Some(id) = parser.first().kind(TokenKind::Mul) {
+        parser.consume();
+        (id, ASTUnaryOperatorKind::Dereference)
     } else {
         return parse_as_expression(allow_struct_literal, id_alloc, parser, file, diagnostics);
     };

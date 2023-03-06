@@ -1053,6 +1053,8 @@ fn convert_unary_op(op: ASTUnaryOperatorKind) -> UnaryOperator {
         ASTUnaryOperatorKind::Minus => UnaryOperator::Minus,
         ASTUnaryOperatorKind::BitNot => UnaryOperator::BitNot,
         ASTUnaryOperatorKind::LogNot => UnaryOperator::LogNot,
+        ASTUnaryOperatorKind::AddressOf => todo!(),
+        ASTUnaryOperatorKind::Dereference => todo!(),
     }
 }
 

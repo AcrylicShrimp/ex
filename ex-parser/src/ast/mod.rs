@@ -360,6 +360,8 @@ pub enum ASTUnaryOperatorKind {
     Minus,
     BitNot,
     LogNot,
+    AddressOf,
+    Dereference,
 }
 
 #[derive(Debug, Clone, Hash)]
