@@ -112,6 +112,7 @@ dependencies = [
  "ex-optimization",
  "ex-parser",
  "ex-resolve-ref",
+ "ex-semantic-checking",
  "ex-span",
  "ex-symbol",
  "ex-type-checking",
@@ -173,6 +174,16 @@ dependencies = [
 
 [[package]]
 name = "ex-resolve-ref"
+version = "0.1.0"
+dependencies = [
+ "ex-diagnostics",
+ "ex-parser",
+ "ex-span",
+ "ex-symbol",
+]
+
+[[package]]
+name = "ex-semantic-checking"
 version = "0.1.0"
 dependencies = [
  "ex-diagnostics",

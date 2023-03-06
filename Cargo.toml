@@ -14,6 +14,7 @@ ex-diagnostics = { path = "ex-diagnostics" }
 ex-optimization = { path = "ex-optimization" }
 ex-parser = { path = "ex-parser" }
 ex-resolve-ref = { path = "ex-resolve-ref" }
+ex-semantic-checking = { path = "ex-semantic-checking" }
 ex-span = { path = "ex-span" }
 ex-symbol = { path = "ex-symbol" }
 ex-type-checking = { path = "ex-type-checking" }
@@ -28,6 +29,7 @@ members = [
   "ex-optimization",
   "ex-parser",
   "ex-resolve-ref",
+  "ex-semantic-checking",
   "ex-span",
   "ex-symbol",
   "ex-type-checking",
