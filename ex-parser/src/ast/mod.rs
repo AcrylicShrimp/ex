@@ -18,13 +18,13 @@ pub struct Typename {
 #[derive(Debug, Clone, Hash)]
 pub enum TypenameKind {
     Id(Id),
-    Function(TypenameFunction),
+    Callable(TypenameCallable),
     Pointer(TypenamePointer),
     Reference(TypenameReference),
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct TypenameFunction {
+pub struct TypenameCallable {
     pub keyword_fn: Id,
     pub paren_open: Id,
     pub parameters: Vec<TypenameFunctionParameter>,

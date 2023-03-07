@@ -1775,7 +1775,7 @@ fn parse_simple_typename(
         Ok(Typename {
             span: function.span,
             id: id_alloc.allocate(),
-            kind: TypenameKind::Function(function),
+            kind: TypenameKind::Callable(function),
         })
     } else if let Some(id) = parser.first().id() {
         parser.consume();
@@ -1800,7 +1800,7 @@ fn parse_typename_function(
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
-) -> Result<TypenameFunction, ()> {
+) -> Result<TypenameCallable, ()> {
     let keyword_fn = if let Some(id) = parser.first().keyword(*crate::KEYWORD_FN) {
         parser.consume();
         id
@@ -1847,7 +1847,7 @@ fn parse_typename_function(
         .as_ref()
         .map_or_else(|| paren_close.span, |return_type| return_type.span));
 
-    Ok(TypenameFunction {
+    Ok(TypenameCallable {
         keyword_fn,
         paren_open,
         parameters,

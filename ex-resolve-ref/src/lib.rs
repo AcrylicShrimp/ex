@@ -1328,7 +1328,7 @@ fn resolve_type_kind(
                 }
             },
         },
-        TypenameKind::Function(function) => TypeKind::callable(
+        TypenameKind::Callable(function) => TypeKind::callable(
             function
                 .parameters
                 .iter()
