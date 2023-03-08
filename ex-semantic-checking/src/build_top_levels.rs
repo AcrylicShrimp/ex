@@ -7,13 +7,27 @@ use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone)]
 pub struct TopLevelTable {
-    pub functions: HashMap<Symbol, Function>,
-    pub user_types: HashMap<Symbol, UserType>,
+    pub functions: HashMap<NodeId, Function>,
+    pub function_symbols: HashMap<Symbol, NodeId>,
+    pub user_types: HashMap<NodeId, UserType>,
+    pub user_type_symbols: HashMap<Symbol, NodeId>,
 }
 
 impl TopLevelTable {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn lookup_function(&self, symbol: Symbol) -> Option<&Function> {
+        self.function_symbols
+            .get(&symbol)
+            .and_then(|node_id| self.functions.get(node_id))
+    }
+
+    pub fn lookup_user_type(&self, symbol: Symbol) -> Option<&UserType> {
+        self.user_type_symbols
+            .get(&symbol)
+            .and_then(|node_id| self.user_types.get(node_id))
     }
 }
 
@@ -95,13 +109,13 @@ pub fn build_top_levels(
         let params = function
             .params
             .iter()
-            .map(|param| typename_to_type_kind(param, unresolved_table, diagnostics))
+            .map(|param| typename_to_type_kind(unresolved_table, param, diagnostics))
             .collect();
         let param_names = function.param_names.clone();
         let return_type = function
             .return_type
             .as_ref()
-            .map(|return_type| typename_to_type_kind(return_type, unresolved_table, diagnostics))
+            .map(|return_type| typename_to_type_kind(unresolved_table, return_type, diagnostics))
             .unwrap_or_else(|| TypeKind::Empty);
         let function = Function::new(
             function.id,
@@ -111,9 +125,7 @@ pub fn build_top_levels(
             return_type,
             function.span,
         );
-        table
-            .functions
-            .insert(function.name.symbol.clone(), function);
+        table.functions.insert(function.id, function);
     }
 
     for user_type in unresolved_table.user_types.values() {
@@ -122,7 +134,7 @@ pub fn build_top_levels(
                 let fields = user_struct
                     .fields
                     .iter()
-                    .map(|field| typename_to_type_kind(field, unresolved_table, diagnostics))
+                    .map(|field| typename_to_type_kind(unresolved_table, field, diagnostics))
                     .collect();
                 let field_names = user_struct
                     .field_names
@@ -136,10 +148,9 @@ pub fn build_top_levels(
                     field_names,
                     user_struct.span,
                 );
-                table.user_types.insert(
-                    user_struct.name.symbol.clone(),
-                    UserType::user_struct(user_struct),
-                );
+                table
+                    .user_types
+                    .insert(user_struct.id, UserType::user_struct(user_struct));
             }
         }
     }
@@ -148,8 +159,8 @@ pub fn build_top_levels(
 }
 
 pub fn typename_to_type_kind(
-    typename: &Typename,
     unresolved_table: &UnresolvedTopLevelTable,
+    typename: &Typename,
     diagnostics: &DiagnosticsSender,
 ) -> TypeKind {
     match &typename.kind {
@@ -158,7 +169,7 @@ pub fn typename_to_type_kind(
             symbol if symbol == *ex_parser::TYPENAME_INT => TypeKind::int(),
             symbol if symbol == *ex_parser::TYPENAME_FLOAT => TypeKind::float(),
             symbol if symbol == *ex_parser::TYPENAME_STRING => TypeKind::string(),
-            symbol => match unresolved_table.user_types.get(&symbol) {
+            symbol => match unresolved_table.lookup_user_type(symbol) {
                 Some(user_type) => match user_type {
                     UnresolvedUserType::UserStruct(user_struct) => {
                         TypeKind::user_struct(user_struct.id)
@@ -174,23 +185,23 @@ pub fn typename_to_type_kind(
             let params = function
                 .parameters
                 .iter()
-                .map(|param| typename_to_type_kind(&param.typename, unresolved_table, diagnostics))
+                .map(|param| typename_to_type_kind(unresolved_table, &param.typename, diagnostics))
                 .collect();
             let return_type = function
                 .return_type
                 .as_ref()
                 .map(|return_type| {
-                    typename_to_type_kind(&return_type.typename, unresolved_table, diagnostics)
+                    typename_to_type_kind(unresolved_table, &return_type.typename, diagnostics)
                 })
                 .unwrap_or_else(|| TypeKind::empty());
             TypeKind::callable(params, return_type)
         }
         TypenameKind::Pointer(pointer) => {
-            let inner = typename_to_type_kind(&pointer.typename, unresolved_table, diagnostics);
+            let inner = typename_to_type_kind(unresolved_table, &pointer.typename, diagnostics);
             TypeKind::pointer(inner)
         }
         TypenameKind::Reference(reference) => {
-            let inner = typename_to_type_kind(&reference.typename, unresolved_table, diagnostics);
+            let inner = typename_to_type_kind(unresolved_table, &reference.typename, diagnostics);
             TypeKind::reference(inner)
         }
     }

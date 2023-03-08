@@ -1,17 +1,32 @@
-use ex_parser::{ASTProgram, ASTTopLevelKind, Id, NodeId, Typename};
+use ex_diagnostics::DiagnosticsSender;
+use ex_parser::{ASTFunction, ASTProgram, ASTStruct, ASTTopLevelKind, Id, NodeId, Typename};
 use ex_span::Span;
 use ex_symbol::Symbol;
-use std::collections::HashMap;
+use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Default, Debug, Clone)]
 pub struct UnresolvedTopLevelTable {
-    pub functions: HashMap<Symbol, UnresolvedFunction>,
-    pub user_types: HashMap<Symbol, UnresolvedUserType>,
+    pub functions: HashMap<NodeId, UnresolvedFunction>,
+    pub function_symbols: HashMap<Symbol, NodeId>,
+    pub user_types: HashMap<NodeId, UnresolvedUserType>,
+    pub user_type_symbols: HashMap<Symbol, NodeId>,
 }
 
 impl UnresolvedTopLevelTable {
     pub fn new() -> Self {
         Default::default()
+    }
+
+    pub fn lookup_function(&self, symbol: Symbol) -> Option<&UnresolvedFunction> {
+        self.function_symbols
+            .get(&symbol)
+            .and_then(|node_id| self.functions.get(node_id))
+    }
+
+    pub fn lookup_user_type(&self, symbol: Symbol) -> Option<&UnresolvedUserType> {
+        self.user_type_symbols
+            .get(&symbol)
+            .and_then(|node_id| self.user_types.get(node_id))
     }
 }
 
@@ -83,12 +98,17 @@ impl UnresolvedUserStruct {
     }
 }
 
-pub fn build_unresolved_top_levels(ast: &ASTProgram) -> UnresolvedTopLevelTable {
+pub fn build_unresolved_top_levels(
+    ast: &ASTProgram,
+    diagnostics: &DiagnosticsSender,
+) -> UnresolvedTopLevelTable {
     let mut unresolved_top_level_table = UnresolvedTopLevelTable::new();
 
     for top_level in &ast.top_levels {
         match &top_level.kind {
             ASTTopLevelKind::Function(ast) => {
+                check_duplicated_parameters(ast, diagnostics);
+
                 let params = ast
                     .signature
                     .parameters
@@ -114,9 +134,11 @@ pub fn build_unresolved_top_levels(ast: &ASTProgram) -> UnresolvedTopLevelTable 
                 );
                 unresolved_top_level_table
                     .functions
-                    .insert(unresolved_function.name.symbol.clone(), unresolved_function);
+                    .insert(unresolved_function.id, unresolved_function);
             }
             ASTTopLevelKind::Struct(ast) => {
+                check_duplicated_fields(ast, diagnostics);
+
                 let fields = ast
                     .fields
                     .iter()
@@ -136,7 +158,7 @@ pub fn build_unresolved_top_levels(ast: &ASTProgram) -> UnresolvedTopLevelTable 
                     top_level.span,
                 );
                 unresolved_top_level_table.user_types.insert(
-                    unresolved_user_struct.name.symbol.clone(),
+                    unresolved_user_struct.id,
                     UnresolvedUserType::user_struct(unresolved_user_struct),
                 );
             }
@@ -144,4 +166,44 @@ pub fn build_unresolved_top_levels(ast: &ASTProgram) -> UnresolvedTopLevelTable 
     }
 
     unresolved_top_level_table
+}
+
+fn check_duplicated_parameters(ast: &ASTFunction, diagnostics: &DiagnosticsSender) {
+    let mut param_names = HashMap::<Symbol, Span>::new();
+
+    for param in &ast.signature.parameters {
+        match param_names.entry(param.name.symbol) {
+            Entry::Occupied(entry) => {
+                diagnostics.error_sub(
+                    param.name.span,
+                    format!("duplicated parameter name {}", param.name.symbol),
+                    vec![
+                        diagnostics.sub_hint(*entry.get(), format!("previous parameter name here"))
+                    ],
+                );
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(param.name.span);
+            }
+        }
+    }
+}
+
+fn check_duplicated_fields(ast: &ASTStruct, diagnostics: &DiagnosticsSender) {
+    let mut field_names = HashMap::<Symbol, Span>::new();
+
+    for field in &ast.fields {
+        match field_names.entry(field.name.symbol) {
+            Entry::Occupied(entry) => {
+                diagnostics.error_sub(
+                    field.name.span,
+                    format!("duplicated field name {}", field.name.symbol),
+                    vec![diagnostics.sub_hint(*entry.get(), format!("previous field name here"))],
+                );
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(field.name.span);
+            }
+        }
+    }
 }
