@@ -1,4 +1,6 @@
-use crate::{typename_to_type_kind, TypeKind, UnresolvedFunction, UnresolvedTopLevelTable};
+use crate::resolve::{
+    typename_to_type_kind, TypeKind, UnresolvedFunction, UnresolvedTopLevelTable,
+};
 use ex_diagnostics::DiagnosticsSender;
 use ex_parser::{
     ASTBlock, ASTExpression, ASTExpressionKind, ASTFunction, ASTIdReference, ASTProgram,

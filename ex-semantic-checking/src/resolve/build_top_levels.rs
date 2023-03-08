@@ -1,4 +1,4 @@
-use crate::{TypeKind, UnresolvedTopLevelTable, UnresolvedUserType};
+use crate::resolve::{TypeKind, UnresolvedTopLevelTable, UnresolvedUserType};
 use ex_diagnostics::DiagnosticsSender;
 use ex_parser::{Id, NodeId, Typename, TypenameKind};
 use ex_span::Span;
@@ -69,6 +69,12 @@ pub enum UserType {
 impl UserType {
     pub fn user_struct(user_struct: UserStruct) -> Self {
         Self::UserStruct(user_struct)
+    }
+
+    pub fn as_user_struct(&self) -> Option<&UserStruct> {
+        match self {
+            Self::UserStruct(user_struct) => Some(user_struct),
+        }
     }
 }
 

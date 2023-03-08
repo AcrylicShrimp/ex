@@ -1,6 +1,6 @@
 use ex_parser::NodeId;
 
-#[derive(Debug, Clone, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeKind {
     Unknown,
     Empty,
@@ -69,5 +69,9 @@ impl TypeKind {
         Self::Reference {
             inner: Box::new(inner),
         }
+    }
+
+    pub fn is_reference(&self) -> bool {
+        matches!(self, Self::Reference { .. })
     }
 }
