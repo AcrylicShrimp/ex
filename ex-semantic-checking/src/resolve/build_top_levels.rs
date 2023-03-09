@@ -8,26 +8,12 @@ use std::collections::HashMap;
 #[derive(Default, Debug, Clone)]
 pub struct TopLevelTable {
     pub functions: HashMap<NodeId, Function>,
-    pub function_symbols: HashMap<Symbol, NodeId>,
     pub user_types: HashMap<NodeId, UserType>,
-    pub user_type_symbols: HashMap<Symbol, NodeId>,
 }
 
 impl TopLevelTable {
     pub fn new() -> Self {
         Default::default()
-    }
-
-    pub fn lookup_function(&self, symbol: Symbol) -> Option<&Function> {
-        self.function_symbols
-            .get(&symbol)
-            .and_then(|node_id| self.functions.get(node_id))
-    }
-
-    pub fn lookup_user_type(&self, symbol: Symbol) -> Option<&UserType> {
-        self.user_type_symbols
-            .get(&symbol)
-            .and_then(|node_id| self.user_types.get(node_id))
     }
 }
 
@@ -83,6 +69,7 @@ pub struct UserStruct {
     pub id: NodeId,
     pub name: Id,
     pub fields: Vec<TypeKind>,
+    pub field_spans: Vec<Span>,
     pub field_names: HashMap<Symbol, usize>,
     pub span: Span,
 }
@@ -92,6 +79,7 @@ impl UserStruct {
         id: NodeId,
         name: Id,
         fields: Vec<TypeKind>,
+        field_spans: Vec<Span>,
         field_names: HashMap<Symbol, usize>,
         span: Span,
     ) -> Self {
@@ -99,6 +87,7 @@ impl UserStruct {
             id,
             name,
             fields,
+            field_spans,
             field_names,
             span,
         }
@@ -142,6 +131,7 @@ pub fn build_top_levels(
                     .iter()
                     .map(|field| typename_to_type_kind(unresolved_table, field, diagnostics))
                     .collect();
+                let field_spans = user_struct.field_spans.clone();
                 let field_names = user_struct
                     .field_names
                     .iter()
@@ -151,6 +141,7 @@ pub fn build_top_levels(
                     user_struct.id,
                     user_struct.name.clone(),
                     fields,
+                    field_spans,
                     field_names,
                     user_struct.span,
                 );

@@ -86,18 +86,6 @@ impl SymbolReferenceKind {
             index,
         }
     }
-
-    pub fn is_function(&self) -> bool {
-        matches!(self, Self::Function { .. })
-    }
-
-    pub fn is_parameter(&self) -> bool {
-        matches!(self, Self::Parameter { .. })
-    }
-
-    pub fn is_variable(&self) -> bool {
-        matches!(self, Self::Variable { .. })
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -180,7 +168,7 @@ impl ScopeVariable {
     }
 }
 
-pub fn build_reference_table(
+pub fn build_references(
     unresolved_table: &UnresolvedTopLevelTable,
     ast: &ASTProgram,
     diagnostics: &DiagnosticsSender,
@@ -527,9 +515,17 @@ pub fn build_references_and_scopes_expression(
         ASTExpressionKind::StructLiteral(ast) => {
             let type_reference =
                 resolve_type_reference(unresolved_table, &ast.typename, diagnostics);
-            reference_table
-                .type_references
-                .insert(ast.typename.id, type_reference);
+
+            if type_reference.kind.is_user_struct() {
+                reference_table
+                    .type_references
+                    .insert(ast.typename.id, type_reference);
+            } else {
+                diagnostics.error(
+                    ast.typename.span,
+                    format!("expected a struct type, found `{}`", type_reference.kind),
+                );
+            }
 
             for field in &ast.fields {
                 build_references_and_scopes_expression(

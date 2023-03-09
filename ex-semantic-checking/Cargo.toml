@@ -10,3 +10,4 @@ ex-diagnostics = { path = "../ex-diagnostics" }
 ex-parser = { path = "../ex-parser" }
 ex-span = { path = "../ex-span" }
 ex-symbol = { path = "../ex-symbol" }
+lazy_static = { version = "1" }

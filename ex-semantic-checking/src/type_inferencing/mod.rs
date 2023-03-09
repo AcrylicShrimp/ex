@@ -1,5 +1,7 @@
 mod build_type_contraints;
-mod type_constraint_table;
+mod build_type_table;
+mod builtin_operators;
 
 pub use build_type_contraints::*;
-pub use type_constraint_table::*;
+pub use build_type_table::*;
+pub use builtin_operators::*;

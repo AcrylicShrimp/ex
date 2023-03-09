@@ -190,6 +190,7 @@ dependencies = [
  "ex-parser",
  "ex-span",
  "ex-symbol",
+ "lazy_static",
 ]
 
 [[package]]

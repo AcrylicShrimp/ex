@@ -76,6 +76,7 @@ pub struct UnresolvedUserStruct {
     pub id: NodeId,
     pub name: Id,
     pub fields: Vec<Typename>,
+    pub field_spans: Vec<Span>,
     pub field_names: HashMap<Symbol, usize>,
     pub span: Span,
 }
@@ -85,6 +86,7 @@ impl UnresolvedUserStruct {
         id: NodeId,
         name: Id,
         fields: Vec<Typename>,
+        field_spans: Vec<Span>,
         field_names: HashMap<Symbol, usize>,
         span: Span,
     ) -> Self {
@@ -92,6 +94,7 @@ impl UnresolvedUserStruct {
             id,
             name,
             fields,
+            field_spans,
             field_names,
             span,
         }
@@ -130,7 +133,7 @@ pub fn build_unresolved_top_levels(
                         .return_type
                         .as_ref()
                         .map(|return_type| return_type.typename.clone()),
-                    top_level.span,
+                    ast.signature.span,
                 );
                 unresolved_top_level_table
                     .functions
@@ -144,6 +147,7 @@ pub fn build_unresolved_top_levels(
                     .iter()
                     .map(|field| field.typename.clone())
                     .collect();
+                let field_spans = ast.fields.iter().map(|field| field.span).collect();
                 let field_names = HashMap::from_iter(
                     ast.fields
                         .iter()
@@ -154,6 +158,7 @@ pub fn build_unresolved_top_levels(
                     top_level.id,
                     ast.name.clone(),
                     fields,
+                    field_spans,
                     field_names,
                     top_level.span,
                 );
