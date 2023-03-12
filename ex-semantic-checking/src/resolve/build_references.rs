@@ -604,7 +604,7 @@ fn resolve_symbol_reference(
 
     diagnostics.error(
         ast.span,
-        format!("`{}` is not declared", ast.reference.symbol),
+        format!("{} is not declared", ast.reference.symbol),
     );
     None
 }

@@ -100,6 +100,10 @@ impl TypeKind {
         matches!(self, TypeKind::Empty)
     }
 
+    pub fn is_reference(&self) -> bool {
+        matches!(self, TypeKind::Reference { .. })
+    }
+
     pub fn is_user_struct(&self) -> bool {
         matches!(self, TypeKind::UserStruct { .. })
     }

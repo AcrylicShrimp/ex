@@ -268,6 +268,8 @@ pub fn check_types_stmt_block(
                     diagnostics,
                 );
 
+                // TODO: We should check if left is a l-value, or has reference type.
+
                 if let (Some(left), Some(right)) = (
                     type_table.types.get(&ast.left.id),
                     type_table.types.get(&ast.right.id),
