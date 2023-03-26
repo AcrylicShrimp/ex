@@ -22,7 +22,7 @@ impl ReferenceTable {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct TypeReference {
     pub id: NodeId,
     pub kind: TypeKind,
@@ -35,7 +35,7 @@ impl TypeReference {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct SymbolReference {
     pub id: NodeId,
     pub name: Id,
@@ -54,7 +54,7 @@ impl SymbolReference {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub enum SymbolReferenceKind {
     Function {
         function: NodeId,
