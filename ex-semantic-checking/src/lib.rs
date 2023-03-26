@@ -1,5 +1,6 @@
 mod cfg_checking;
 mod check_types;
+pub mod hir;
 mod lvalue_checking;
 mod resolve;
 mod type_inferencing;
