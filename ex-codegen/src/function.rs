@@ -7,7 +7,7 @@ use std::iter::empty as iter_empty;
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: Symbol,
-    pub parameters: Vec<FunctionParameter>,
+    pub params: Vec<FunctionParam>,
     pub return_type_id: TypeId,
     pub variable_table: VariableTable,
     pub block_table: BasicBlockTable,
@@ -16,11 +16,11 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(name: Symbol, parameter_type_ids: Vec<TypeId>, return_type_id: TypeId) -> Self {
+    pub fn new(name: Symbol, param_type_ids: Vec<TypeId>, return_type_id: TypeId) -> Self {
         let mut variable_table = VariableTable::new();
-        let parameters = parameter_type_ids
+        let params = param_type_ids
             .into_iter()
-            .map(|type_id| FunctionParameter::new(type_id, variable_table.insert(type_id)))
+            .map(|type_id| FunctionParam::new(type_id, variable_table.insert(type_id)))
             .collect();
 
         let mut block_table = BasicBlockTable::new();
@@ -32,7 +32,7 @@ impl Function {
 
         Self {
             name,
-            parameters,
+            params,
             return_type_id,
             variable_table,
             block_table,
@@ -45,9 +45,9 @@ impl Function {
         self.variable_table.insert(type_id)
     }
 
-    pub fn new_block(&mut self, parameters: impl Iterator<Item = TypeId>) -> BasicBlock {
+    pub fn new_block(&mut self, params: impl Iterator<Item = TypeId>) -> BasicBlock {
         let id = self.block_id_allocator.allocate();
-        let block = BasicBlock::new(id, parameters);
+        let block = BasicBlock::new(id, params);
         block
     }
 
@@ -57,12 +57,12 @@ impl Function {
 }
 
 #[derive(Debug, Clone)]
-pub struct FunctionParameter {
+pub struct FunctionParam {
     pub type_id: TypeId,
     pub variable_id: VariableId,
 }
 
-impl FunctionParameter {
+impl FunctionParam {
     pub fn new(type_id: TypeId, variable_id: VariableId) -> Self {
         Self {
             type_id,

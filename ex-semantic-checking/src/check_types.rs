@@ -375,12 +375,12 @@ pub fn check_types_expression(
                 diagnostics,
             );
 
-            for argument in &ast.arguments {
+            for arg in &ast.args {
                 check_types_expression(
                     type_table,
                     top_level_table,
                     function,
-                    &argument.expression,
+                    &arg.expression,
                     diagnostics,
                 );
             }
@@ -388,26 +388,22 @@ pub fn check_types_expression(
             if let Some(type_kind) = type_table.types.get(&ast.expression.id) {
                 match type_kind.unwrap_reference() {
                     TypeKind::Callable { params, .. } => {
-                        if params.len() != ast.arguments.len() {
+                        if params.len() != ast.args.len() {
                             diagnostics.error(
                                 ast.expression.span,
-                                format!(
-                                    "expected {} arguments, found {}",
-                                    params.len(),
-                                    ast.arguments.len()
-                                ),
+                                format!("expected {} args, found {}", params.len(), ast.args.len()),
                             );
                         } else {
-                            for (param, argument) in params.iter().zip(ast.arguments.iter()) {
-                                if let Some(argument_type_kind) =
-                                    type_table.types.get(&argument.expression.id)
+                            for (param, arg) in params.iter().zip(ast.args.iter()) {
+                                if let Some(arg_type_kind) =
+                                    type_table.types.get(&arg.expression.id)
                                 {
-                                    if !TypeKind::is_subtype(argument_type_kind, param) {
+                                    if !TypeKind::is_subtype(arg_type_kind, param) {
                                         diagnostics.error_sub(
-                                            argument.expression.span,
+                                            arg.expression.span,
                                             format!(
                                                 "cannot pass incompatible type `{}`",
-                                                argument_type_kind.display(top_level_table)
+                                                arg_type_kind.display(top_level_table)
                                             ),
                                             vec![diagnostics.sub_hint_simple(format!(
                                                 "expected type `{}`",

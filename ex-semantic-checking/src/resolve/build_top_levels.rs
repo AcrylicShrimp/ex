@@ -180,7 +180,7 @@ pub fn typename_to_type_kind(
         },
         TypenameKind::Callable(function) => {
             let params = function
-                .parameters
+                .params
                 .iter()
                 .map(|param| typename_to_type_kind(unresolved_table, &param.typename, diagnostics))
                 .collect();

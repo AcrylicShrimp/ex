@@ -16,7 +16,7 @@ impl SymbolNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SymbolNodeKind {
     Function,
-    Parameter { index: usize },
+    Param { index: usize },
     Variable,
 }
 
@@ -25,8 +25,8 @@ impl SymbolNodeKind {
         Self::Function
     }
 
-    pub fn parameter(index: usize) -> Self {
-        Self::Parameter { index }
+    pub fn param(index: usize) -> Self {
+        Self::Param { index }
     }
 
     pub fn variable() -> Self {
@@ -37,8 +37,8 @@ impl SymbolNodeKind {
         matches!(self, Self::Function)
     }
 
-    pub fn is_parameter(&self) -> bool {
-        matches!(self, Self::Parameter { .. })
+    pub fn is_param(&self) -> bool {
+        matches!(self, Self::Param { .. })
     }
 
     pub fn is_variable(&self) -> bool {

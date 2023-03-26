@@ -484,12 +484,12 @@ pub fn check_types_expression(
                 diagnostics,
             );
 
-            for argument in &expr_call.arguments {
+            for arg in &expr_call.args {
                 check_types_expression(
                     type_table,
                     type_reference_table,
                     user_type_table,
-                    &argument.expression,
+                    &arg.expression,
                     file,
                     diagnostics,
                 );
@@ -497,15 +497,15 @@ pub fn check_types_expression(
 
             if let Some(callee_type_kind) = type_table.types.get(&expr_call.expression.id) {
                 match callee_type_kind {
-                    TypeKind::Callable { parameters, .. } => {
-                        if parameters.len() != expr_call.arguments.len() {
+                    TypeKind::Callable { params, .. } => {
+                        if params.len() != expr_call.args.len() {
                             diagnostics
                                 .send(Diagnostics {
                                     level: DiagnosticsLevel::Error,
                                     message: format!(
-                                        "expected {} arguments, found {}",
-                                        parameters.len(),
-                                        expr_call.arguments.len()
+                                        "expected {} args, found {}",
+                                        params.len(),
+                                        expr_call.args.len()
                                     ),
                                     origin: Some(DiagnosticsOrigin {
                                         file: file.clone(),
@@ -515,23 +515,21 @@ pub fn check_types_expression(
                                 })
                                 .unwrap();
                         } else {
-                            for (parameter, argument) in
-                                parameters.iter().zip(expr_call.arguments.iter())
-                            {
-                                if let Some(argument_type_kind) =
-                                    type_table.types.get(&argument.expression.id)
+                            for (param, arg) in params.iter().zip(expr_call.args.iter()) {
+                                if let Some(arg_type_kind) =
+                                    type_table.types.get(&arg.expression.id)
                                 {
-                                    if !parameter.eq(argument_type_kind) {
+                                    if !param.eq(arg_type_kind) {
                                         diagnostics
                                             .send(Diagnostics {
                                                 level: DiagnosticsLevel::Error,
                                                 message: format!(
                                                     "expected type `{}`, found `{}`",
-                                                    parameter, argument_type_kind
+                                                    param, arg_type_kind
                                                 ),
                                                 origin: Some(DiagnosticsOrigin {
                                                     file: file.clone(),
-                                                    span: argument.expression.span,
+                                                    span: arg.expression.span,
                                                 }),
                                                 sub_diagnostics: vec![],
                                             })
@@ -1116,23 +1114,20 @@ fn propagate_type_variables_expression(
                     TypeVariableConstraintOperand::callable_return_type(callee_type_var),
                 ));
 
-            for (index, argument) in expr_call.arguments.iter().enumerate() {
-                let argument_type_var = propagate_type_variables_expression(
+            for (index, arg) in expr_call.args.iter().enumerate() {
+                let arg_type_var = propagate_type_variables_expression(
                     type_table_builder,
                     function_table,
                     user_type_table,
                     symbol_reference_table,
                     type_reference_table,
-                    &argument.expression,
+                    &arg.expression,
                 );
                 type_table_builder
                     .variable_constraints
                     .push(TypeVariableConstraint::subtype(
-                        argument_type_var,
-                        TypeVariableConstraintOperand::callable_parameter_type(
-                            callee_type_var,
-                            index,
-                        ),
+                        arg_type_var,
+                        TypeVariableConstraintOperand::callable_param_type(callee_type_var, index),
                     ));
             }
         }
@@ -1197,12 +1192,12 @@ fn propagate_type_variables_expression(
                             .functions
                             .get(&symbol_reference.node)
                             .unwrap();
-                        let arguments = function
-                            .parameter_typenames
+                        let args = function
+                            .param_typenames
                             .iter()
-                            .map(|parameter| {
+                            .map(|param| {
                                 if let Some(type_reference) =
-                                    type_reference_table.references.get(&parameter.id)
+                                    type_reference_table.references.get(&param.id)
                                 {
                                     type_reference.kind.clone()
                                 } else {
@@ -1221,7 +1216,7 @@ fn propagate_type_variables_expression(
                         } else {
                             TypeKind::empty()
                         };
-                        let type_kind = TypeKind::callable(arguments, return_type);
+                        let type_kind = TypeKind::callable(args, return_type);
                         type_table_builder.variable_constraints.push(
                             TypeVariableConstraint::equal(
                                 type_var,
@@ -1229,7 +1224,7 @@ fn propagate_type_variables_expression(
                             ),
                         );
                     }
-                    SymbolNodeKind::Parameter { index } => {
+                    SymbolNodeKind::Param { index } => {
                         let function = function_table
                             .functions
                             .get(&symbol_reference.node)
@@ -1237,7 +1232,7 @@ fn propagate_type_variables_expression(
 
                         if let Some(type_reference) = type_reference_table
                             .references
-                            .get(&function.parameter_typenames[index].id)
+                            .get(&function.param_typenames[index].id)
                         {
                             type_table_builder.variable_constraints.push(
                                 TypeVariableConstraint::equal(

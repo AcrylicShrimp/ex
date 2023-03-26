@@ -33,8 +33,8 @@ impl FunctionTable {
 pub struct Function {
     pub node: NodeId,
     pub name: Id,
-    pub parameters: Vec<Id>,
-    pub parameter_typenames: Vec<Typename>,
+    pub params: Vec<Id>,
+    pub param_typenames: Vec<Typename>,
     pub return_typename: Option<Typename>,
     pub span: Span,
 }
@@ -43,16 +43,16 @@ impl Function {
     pub fn new(
         node: NodeId,
         name: Id,
-        parameters: Vec<Id>,
-        parameter_typenames: Vec<Typename>,
+        params: Vec<Id>,
+        param_typenames: Vec<Typename>,
         return_typename: Option<Typename>,
         span: Span,
     ) -> Self {
         Self {
             node,
             name,
-            parameters,
-            parameter_typenames,
+            params,
+            param_typenames,
             return_typename,
             span,
         }

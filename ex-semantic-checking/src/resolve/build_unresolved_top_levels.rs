@@ -110,17 +110,17 @@ pub fn build_unresolved_top_levels(
     for top_level in &ast.top_levels {
         match &top_level.kind {
             ASTTopLevelKind::Function(ast) => {
-                check_duplicated_parameters(ast, diagnostics);
+                check_duplicated_params(ast, diagnostics);
 
                 let params = ast
                     .signature
-                    .parameters
+                    .params
                     .iter()
                     .map(|param| param.typename.clone())
                     .collect();
                 let param_names = ast
                     .signature
-                    .parameters
+                    .params
                     .iter()
                     .map(|param| param.name.symbol.clone())
                     .collect();
@@ -173,18 +173,16 @@ pub fn build_unresolved_top_levels(
     unresolved_top_level_table
 }
 
-fn check_duplicated_parameters(ast: &ASTFunction, diagnostics: &DiagnosticsSender) {
+fn check_duplicated_params(ast: &ASTFunction, diagnostics: &DiagnosticsSender) {
     let mut param_names = HashMap::<Symbol, Span>::new();
 
-    for param in &ast.signature.parameters {
+    for param in &ast.signature.params {
         match param_names.entry(param.name.symbol) {
             Entry::Occupied(entry) => {
                 diagnostics.error_sub(
                     param.name.span,
-                    format!("duplicated parameter name {}", param.name.symbol),
-                    vec![
-                        diagnostics.sub_hint(*entry.get(), format!("previous parameter name here"))
-                    ],
+                    format!("duplicated param name {}", param.name.symbol),
+                    vec![diagnostics.sub_hint(*entry.get(), format!("previous param name here"))],
                 );
             }
             Entry::Vacant(entry) => {

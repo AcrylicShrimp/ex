@@ -59,7 +59,7 @@ pub enum SymbolReferenceKind {
     Function {
         function: NodeId,
     },
-    Parameter {
+    Param {
         function: NodeId,
         index: usize,
     },
@@ -75,8 +75,8 @@ impl SymbolReferenceKind {
         Self::Function { function }
     }
 
-    pub fn parameter(function: NodeId, index: usize) -> Self {
-        Self::Parameter { function, index }
+    pub fn param(function: NodeId, index: usize) -> Self {
+        Self::Param { function, index }
     }
 
     pub fn variable(function: NodeId, scope: ScopeId, index: usize) -> Self {
@@ -463,14 +463,14 @@ pub fn build_references_and_scopes_expression(
                 diagnostics,
             );
 
-            for argument in &ast.arguments {
+            for arg in &ast.args {
                 build_references_and_scopes_expression(
                     scope,
                     scope_table,
                     reference_table,
                     unresolved_table,
                     function,
-                    &argument.expression,
+                    &arg.expression,
                     diagnostics,
                 );
             }
@@ -588,7 +588,7 @@ fn resolve_symbol_reference(
         return Some(SymbolReference::new(
             ast.id,
             ast.reference,
-            SymbolReferenceKind::parameter(function.id, index),
+            SymbolReferenceKind::param(function.id, index),
             ast.span,
         ));
     }

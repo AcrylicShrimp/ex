@@ -9,7 +9,7 @@ pub enum TypeKind {
     Float,
     String,
     Callable {
-        parameters: Vec<TypeId>,
+        params: Vec<TypeId>,
         return_type: TypeId,
     },
     UserTypeStruct {

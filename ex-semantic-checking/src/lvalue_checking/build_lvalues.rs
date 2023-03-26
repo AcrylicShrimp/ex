@@ -38,7 +38,7 @@ impl LValue {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LValueKind {
-    Parameter {
+    Param {
         function: NodeId,
         index: usize,
     },
@@ -50,8 +50,8 @@ pub enum LValueKind {
 }
 
 impl LValueKind {
-    pub fn parameter(function: NodeId, index: usize) -> Self {
-        Self::Parameter { function, index }
+    pub fn param(function: NodeId, index: usize) -> Self {
+        Self::Param { function, index }
     }
 
     pub fn variable(function: NodeId, scope: ScopeId, index: usize) -> Self {
@@ -211,8 +211,8 @@ fn build_lvalues_expression(
             let symbol_ref = reference_table.symbol_references.get(&ast.id)?;
             match &symbol_ref.kind {
                 SymbolReferenceKind::Function { .. } => None,
-                SymbolReferenceKind::Parameter { function, index } => {
-                    Some(LValue::new(LValueKind::parameter(*function, *index)))
+                SymbolReferenceKind::Param { function, index } => {
+                    Some(LValue::new(LValueKind::param(*function, *index)))
                 }
                 SymbolReferenceKind::Variable {
                     function,

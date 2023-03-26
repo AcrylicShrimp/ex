@@ -101,7 +101,7 @@ pub enum TypeConstraintTarget {
         operator: ASTUnaryOperatorKind,
         right: TypeVariable,
     },
-    CallableParameterType {
+    CallableParamType {
         variable: TypeVariable,
         index: usize,
     },
@@ -145,8 +145,8 @@ impl TypeConstraintTarget {
         Self::UnaryOperation { operator, right }
     }
 
-    pub fn callable_parameter_type(variable: TypeVariable, index: usize) -> Self {
-        Self::CallableParameterType { variable, index }
+    pub fn callable_param_type(variable: TypeVariable, index: usize) -> Self {
+        Self::CallableParamType { variable, index }
     }
 
     pub fn callable_return_type(variable: TypeVariable) -> Self {
@@ -460,17 +460,17 @@ fn build_type_contraint_table_expression(
                 TypeConstraintTarget::callable_return_type(callee_type_var),
             ));
 
-            for (index, argument) in ast.arguments.iter().enumerate() {
-                let argument_type_var = build_type_contraint_table_expression(
+            for (index, arg) in ast.args.iter().enumerate() {
+                let arg_type_var = build_type_contraint_table_expression(
                     contraint_table,
                     top_level_table,
                     reference_table,
                     function,
-                    &argument.expression,
+                    &arg.expression,
                 );
                 contraint_table.new_constraint(TypeConstraint::subtype(
-                    argument_type_var,
-                    TypeConstraintTarget::callable_parameter_type(callee_type_var, index),
+                    arg_type_var,
+                    TypeConstraintTarget::callable_param_type(callee_type_var, index),
                 ));
             }
         }
@@ -529,7 +529,7 @@ fn build_type_contraint_table_expression(
                             TypeConstraintTarget::concrete(type_kind),
                         ));
                     }
-                    SymbolReferenceKind::Parameter { function, index } => {
+                    SymbolReferenceKind::Param { function, index } => {
                         let function = top_level_table.functions.get(function).unwrap();
                         let param = function.params[*index].clone();
                         contraint_table.new_constraint(TypeConstraint::equal(

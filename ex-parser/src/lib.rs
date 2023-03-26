@@ -133,7 +133,7 @@ fn parse_function_signature(
         return Err(());
     };
 
-    let parameters = parse_function_parameters(id_alloc, parser, file, diagnostics)?;
+    let params = parse_function_params(id_alloc, parser, file, diagnostics)?;
 
     let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
         parser.consume();
@@ -167,23 +167,23 @@ fn parse_function_signature(
         keyword_fn,
         name: function_name,
         paren_open,
-        parameters,
+        params,
         paren_close,
         return_type,
         span,
     })
 }
 
-fn parse_function_parameters(
+fn parse_function_params(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
-) -> Result<Vec<ASTFunctionParameter>, ()> {
-    let mut parameters = Vec::new();
+) -> Result<Vec<ASTFunctionParam>, ()> {
+    let mut params = Vec::new();
 
     while parser.is_exists() && !parser.first().is_kind(TokenKind::CloseParen) {
-        let parameter_name = if let Some(id) = parser.first().id() {
+        let name = if let Some(id) = parser.first().id() {
             parser.consume();
             id
         } else {
@@ -206,12 +206,12 @@ fn parse_function_parameters(
             parser.consume();
         }
 
-        let span = parameter_name
+        let span = name
             .span
             .to(comma.map_or_else(|| typename.span, |comma| comma.span));
 
-        parameters.push(ASTFunctionParameter {
-            name: parameter_name,
+        params.push(ASTFunctionParam {
+            name,
             colon,
             typename,
             comma,
@@ -219,7 +219,7 @@ fn parse_function_parameters(
         })
     }
 
-    Ok(parameters)
+    Ok(params)
 }
 
 fn parse_function_return_type(
@@ -1426,7 +1426,7 @@ fn parse_call_expression_or_member_access(
                 break;
             };
 
-            let arguments = parse_call_arguments(id_alloc, parser, file, diagnostics)?;
+            let args = parse_call_args(id_alloc, parser, file, diagnostics)?;
 
             let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
                 parser.consume();
@@ -1443,7 +1443,7 @@ fn parse_call_expression_or_member_access(
                 kind: ASTExpressionKind::Call(ASTCallExpression {
                     expression: Box::new(left),
                     paren_open,
-                    arguments,
+                    args: args,
                     paren_close,
                     span,
                 }),
@@ -1457,13 +1457,13 @@ fn parse_call_expression_or_member_access(
     Ok(left)
 }
 
-fn parse_call_arguments(
+fn parse_call_args(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
-) -> Result<Vec<ASTArgumentExpression>, ()> {
-    let mut arguments = Vec::new();
+) -> Result<Vec<ASTArgExpression>, ()> {
+    let mut args = Vec::new();
 
     while parser.is_exists() && !parser.first().is_kind(TokenKind::CloseParen) {
         let expression = parse_expression(true, id_alloc, parser, file, diagnostics)?;
@@ -1479,14 +1479,14 @@ fn parse_call_arguments(
             .span
             .to(comma.map(|c| c.span).unwrap_or(expression.span));
 
-        arguments.push(ASTArgumentExpression {
+        args.push(ASTArgExpression {
             expression,
             comma,
             span,
         });
     }
 
-    Ok(arguments)
+    Ok(args)
 }
 
 fn parse_single_expression(
@@ -1503,13 +1503,6 @@ fn parse_single_expression(
             span: paren.span,
             kind: ASTExpressionKind::Paren(paren),
         })
-    } else if let Some(literal) = parser.first().literal() {
-        parser.consume();
-        Ok(ASTExpression {
-            id: id_alloc.allocate(),
-            span: literal.span,
-            kind: ASTExpressionKind::Literal(literal),
-        })
     } else if parser.first().is_id() {
         parse_id_reference_or_struct_literal(
             allow_struct_literal,
@@ -1518,6 +1511,13 @@ fn parse_single_expression(
             file,
             diagnostics,
         )
+    } else if let Some(literal) = parser.first().literal() {
+        parser.consume();
+        Ok(ASTExpression {
+            id: id_alloc.allocate(),
+            span: literal.span,
+            kind: ASTExpressionKind::Literal(literal),
+        })
     } else {
         unexpected_token(
             parser.first(),
@@ -1817,7 +1817,7 @@ fn parse_typename_function(
         return Err(());
     };
 
-    let parameters = parse_typename_function_parameters(id_alloc, parser, file, diagnostics)?;
+    let params = parse_typename_function_params(id_alloc, parser, file, diagnostics)?;
 
     let paren_close = if let Some(id) = parser.first().kind(TokenKind::CloseParen) {
         parser.consume();
@@ -1850,20 +1850,20 @@ fn parse_typename_function(
     Ok(TypenameCallable {
         keyword_fn,
         paren_open,
-        parameters,
+        params,
         paren_close,
         return_type,
         span,
     })
 }
 
-fn parse_typename_function_parameters(
+fn parse_typename_function_params(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
-) -> Result<Vec<TypenameFunctionParameter>, ()> {
-    let mut parameters = Vec::new();
+) -> Result<Vec<TypenameFunctionParam>, ()> {
+    let mut params = Vec::new();
 
     while parser.is_exists() && !parser.first().is_kind(TokenKind::CloseParen) {
         let typename = parse_typename(id_alloc, parser, file, diagnostics)?;
@@ -1877,14 +1877,14 @@ fn parse_typename_function_parameters(
             .span
             .to(comma.map_or_else(|| typename.span, |comma| comma.span));
 
-        parameters.push(TypenameFunctionParameter {
+        params.push(TypenameFunctionParam {
             typename: Box::new(typename),
             comma,
             span,
         })
     }
 
-    Ok(parameters)
+    Ok(params)
 }
 
 fn parse_typename_function_return_type(

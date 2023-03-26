@@ -15,7 +15,7 @@ impl AssignmentLhsTable {
 
 #[derive(Debug, Clone, Hash)]
 pub enum AssignmentLhsKind {
-    Parameter { index: usize },
+    Param { index: usize },
     Variable { node: NodeId },
     Field { field: Symbol },
 }

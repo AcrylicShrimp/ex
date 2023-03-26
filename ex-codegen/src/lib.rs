@@ -134,11 +134,9 @@ fn codegen_function(
     let mut function = Function::new(
         ast.signature.name.symbol,
         ast.signature
-            .parameters
+            .params
             .iter()
-            .map(|parameter| {
-                typename_to_type_id(type_table, type_reference_table, &parameter.typename)
-            })
+            .map(|param| typename_to_type_id(type_table, type_reference_table, &param.typename))
             .collect(),
         ast.signature
             .return_type
@@ -765,17 +763,17 @@ fn codegen_function_expression(
                 type_reference_table,
                 symbol_reference_table,
             );
-            let arguments = expr_call
-                .arguments
+            let args = expr_call
+                .args
                 .iter()
-                .map(|argument| {
+                .map(|arg| {
                     codegen_function_expression(
                         block,
                         node_variable_table,
                         type_table,
                         function,
                         user_type_struct_table,
-                        &argument.expression,
+                        &arg.expression,
                         node_function,
                         node_type_table,
                         type_reference_table,
@@ -788,7 +786,7 @@ fn codegen_function_expression(
             let temporary = block.new_temporary(type_id);
             block.new_instruction(InstructionKind::assign(
                 temporary,
-                Expression::new(ExpressionKind::call(expression, arguments), type_id),
+                Expression::new(ExpressionKind::call(expression, args), type_id),
             ));
             temporary
         }
@@ -876,9 +874,9 @@ fn codegen_function_expression(
                     ));
                     temporary
                 }
-                SymbolNodeKind::Parameter { index } => {
-                    let type_id = function.parameters[index].type_id;
-                    let variable = function.parameters[index].variable_id;
+                SymbolNodeKind::Param { index } => {
+                    let type_id = function.params[index].type_id;
+                    let variable = function.params[index].variable_id;
                     let temporary = block.new_temporary(type_id);
                     block.new_instruction(InstructionKind::load(
                         Pointer::new(variable, vec![]),
@@ -991,8 +989,8 @@ fn lhs_expression_to_pointer(
         ),
         ASTExpressionKind::IdReference(_) => {
             match assignment_lhs_table.kinds.get(&expr.id).unwrap() {
-                AssignmentLhsKind::Parameter { index } => {
-                    return Pointer::new(function.parameters[*index].variable_id, vec![]);
+                AssignmentLhsKind::Param { index } => {
+                    return Pointer::new(function.params[*index].variable_id, vec![]);
                 }
                 AssignmentLhsKind::Variable { node } => {
                     return Pointer::new(node_variable_table[node], vec![]);
@@ -1082,10 +1080,10 @@ fn type_kind_to_type_id(type_table: &mut TypeTable, type_kind: &NodeTypeKind) ->
         NodeTypeKind::Float => TypeKind::Float,
         NodeTypeKind::String => TypeKind::String,
         NodeTypeKind::Callable {
-            parameters,
+            params,
             return_type,
         } => TypeKind::Callable {
-            parameters: parameters
+            params: params
                 .iter()
                 .map(|type_kind| type_kind_to_type_id(type_table, type_kind))
                 .collect(),

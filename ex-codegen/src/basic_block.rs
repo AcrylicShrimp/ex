@@ -6,22 +6,22 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct BasicBlock {
     pub id: BlockId,
-    pub parameters: Vec<TemporaryId>,
+    pub params: Vec<TemporaryId>,
     pub temporary_table: TemporaryTable,
     pub instruction_table: InstructionTable,
     pub instructions: Vec<InstructionId>,
 }
 
 impl BasicBlock {
-    pub fn new(id: BlockId, parameters: impl Iterator<Item = TypeId>) -> Self {
+    pub fn new(id: BlockId, params: impl Iterator<Item = TypeId>) -> Self {
         let mut temporary_table = TemporaryTable::new();
-        let parameters = parameters
+        let params = params
             .map(|type_id| temporary_table.insert(type_id))
             .collect();
 
         Self {
             id,
-            parameters,
+            params,
             temporary_table,
             instruction_table: InstructionTable::new(),
             instructions: Vec::new(),

@@ -336,10 +336,10 @@ fn extract_type_kind(
                 _ => None,
             }
         }
-        TypeVariableConstraintOperand::CallableParameterType { variable, index } => {
+        TypeVariableConstraintOperand::CallableParamType { variable, index } => {
             match type_table.types.get(&reverse_variables[variable]) {
                 Some(callable_type_kind) => Some(match callable_type_kind {
-                    TypeKind::Callable { parameters, .. } => parameters
+                    TypeKind::Callable { params, .. } => params
                         .get(*index)
                         .cloned()
                         .unwrap_or_else(|| TypeKind::unknown()),
@@ -445,7 +445,7 @@ pub enum TypeVariableConstraintOperand {
     CallableReturnType {
         variable: TypeVariable,
     },
-    CallableParameterType {
+    CallableParamType {
         variable: TypeVariable,
         index: usize,
     },
@@ -484,8 +484,8 @@ impl TypeVariableConstraintOperand {
         Self::CallableReturnType { variable }
     }
 
-    pub fn callable_parameter_type(variable: TypeVariable, index: usize) -> Self {
-        Self::CallableParameterType { variable, index }
+    pub fn callable_param_type(variable: TypeVariable, index: usize) -> Self {
+        Self::CallableParamType { variable, index }
     }
 
     pub fn member_type(variable: TypeVariable, name: Symbol) -> Self {
@@ -512,8 +512,8 @@ impl TypeVariableConstraintOperand {
         matches!(self, Self::CallableReturnType { .. })
     }
 
-    pub fn is_callable_parameter_type(&self) -> bool {
-        matches!(self, Self::CallableParameterType { .. })
+    pub fn is_callable_param_type(&self) -> bool {
+        matches!(self, Self::CallableParamType { .. })
     }
 
     pub fn is_member_type(&self) -> bool {

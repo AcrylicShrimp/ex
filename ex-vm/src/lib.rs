@@ -21,13 +21,12 @@ pub fn execute(program: &Program) {
     execute_function(program, main_function, vec![]);
 }
 
-fn execute_function(program: &Program, function: &Function, arguments: Vec<Value>) -> Value {
+fn execute_function(program: &Program, function: &Function, args: Vec<Value>) -> Value {
     if function.name.to_str().starts_with("__print_") {
         println!(
             "{}",
-            arguments
-                .iter()
-                .map(|argument| argument.to_string())
+            args.iter()
+                .map(|arg| arg.to_string())
                 .collect::<Vec<_>>()
                 .join(", ")
         );
@@ -45,8 +44,8 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
         ));
     let mut temp_stack: HashMap<TemporaryId, Value> = HashMap::new();
 
-    for (index, argument) in arguments.into_iter().enumerate() {
-        stack.insert(function.parameters[index].variable_id, argument);
+    for (index, arg) in args.into_iter().enumerate() {
+        stack.insert(function.params[index].variable_id, arg);
     }
 
     let mut block_id = function.entry_block_id;
@@ -254,14 +253,12 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
                         temp_stack.insert(*temporary, value);
                     }
                 }
-                InstructionKind::Jump { block, arguments } => {
+                InstructionKind::Jump { block, args } => {
                     let next_block = &function.block_table.blocks[block];
-                    let next_temp_stack = arguments
+                    let next_temp_stack = args
                         .iter()
                         .enumerate()
-                        .map(|(index, argument)| {
-                            (next_block.parameters[index], temp_stack[argument].clone())
-                        })
+                        .map(|(index, arg)| (next_block.params[index], temp_stack[arg].clone()))
                         .collect();
                     block_id = *block;
                     temp_stack = next_temp_stack;
@@ -270,19 +267,19 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
                 InstructionKind::Branch {
                     condition,
                     then_block,
-                    then_arguments,
+                    then_args,
                     else_block,
-                    else_arguments,
+                    else_args,
                 } => {
                     let condition = temp_stack[condition].as_bool();
                     let (next_temp_stack, block) = if condition {
                         let next_block = &function.block_table.blocks[then_block];
                         (
-                            then_arguments
+                            then_args
                                 .iter()
                                 .enumerate()
-                                .map(|(index, argument)| {
-                                    (next_block.parameters[index], temp_stack[argument].clone())
+                                .map(|(index, arg)| {
+                                    (next_block.params[index], temp_stack[arg].clone())
                                 })
                                 .collect(),
                             then_block,
@@ -290,11 +287,11 @@ fn execute_function(program: &Program, function: &Function, arguments: Vec<Value
                     } else {
                         let next_block = &function.block_table.blocks[else_block];
                         (
-                            else_arguments
+                            else_args
                                 .iter()
                                 .enumerate()
-                                .map(|(index, argument)| {
-                                    (next_block.parameters[index], temp_stack[argument].clone())
+                                .map(|(index, arg)| {
+                                    (next_block.params[index], temp_stack[arg].clone())
                                 })
                                 .collect(),
                             else_block,
@@ -524,19 +521,13 @@ fn eval_expression(
                 _ => unreachable!(),
             }
         }
-        ExpressionKind::Call {
-            expression,
-            arguments,
-        } => {
+        ExpressionKind::Call { expression, args } => {
             let function = match temp_stack[expression] {
                 Value::Callable(function) => function,
                 _ => unreachable!(),
             };
-            let arguments = arguments
-                .iter()
-                .map(|argument| temp_stack[argument].clone())
-                .collect();
-            execute_function(program, &program.functions[&function], arguments)
+            let args = args.iter().map(|arg| temp_stack[arg].clone()).collect();
+            execute_function(program, &program.functions[&function], args)
         }
         ExpressionKind::Literal { literal } => {
             match &program.type_table.types[&expression.type_id] {

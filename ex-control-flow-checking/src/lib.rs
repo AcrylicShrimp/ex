@@ -549,13 +549,13 @@ fn check_variable_usage(
                 diagnostics,
             );
 
-            for argument in &expr_call.arguments {
+            for arg in &expr_call.args {
                 check_variable_usage(
                     cfg,
                     type_table,
                     user_type_table,
                     symbol_reference_table,
-                    &argument.expression,
+                    &arg.expression,
                     file,
                     diagnostics,
                 );
@@ -654,7 +654,7 @@ fn mark_variable_as_initialized(
         ASTExpressionKind::Member(expr_member) => {
             if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&ast.id) {
                 match lhs_kind {
-                    AssignmentLhsKind::Parameter { .. } => {
+                    AssignmentLhsKind::Param { .. } => {
                         return;
                     }
                     AssignmentLhsKind::Variable { .. } => {
@@ -725,8 +725,8 @@ fn mark_variable_as_initialized(
         ASTExpressionKind::IdReference(_) => {
             if let Some(lhs_kind) = assignment_lhs_table.kinds.get(&ast.id) {
                 match lhs_kind {
-                    AssignmentLhsKind::Parameter { .. } => {
-                        // Parameters are always initialized.
+                    AssignmentLhsKind::Param { .. } => {
+                        // Params are always initialized.
                     }
                     AssignmentLhsKind::Variable { node } => {
                         cfg.initialized_variables.insert(*node);

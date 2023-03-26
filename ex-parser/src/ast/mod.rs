@@ -27,7 +27,7 @@ pub enum TypenameKind {
 pub struct TypenameCallable {
     pub keyword_fn: Id,
     pub paren_open: Id,
-    pub parameters: Vec<TypenameFunctionParameter>,
+    pub params: Vec<TypenameFunctionParam>,
     pub paren_close: Id,
     pub return_type: Option<TypenameFunctionReturnType>,
     pub span: Span,
@@ -48,7 +48,7 @@ pub struct TypenameReference {
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct TypenameFunctionParameter {
+pub struct TypenameFunctionParam {
     pub typename: Box<Typename>,
     pub comma: Option<Id>,
     pub span: Span,
@@ -100,6 +100,33 @@ pub struct ASTFunction {
 }
 
 #[derive(Debug, Clone, Hash)]
+pub struct ASTFunctionSignature {
+    pub keyword_fn: Id,
+    pub name: Id,
+    pub paren_open: Id,
+    pub params: Vec<ASTFunctionParam>,
+    pub paren_close: Id,
+    pub return_type: Option<ASTFunctionReturnType>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTFunctionParam {
+    pub name: Id,
+    pub colon: Id,
+    pub typename: Typename,
+    pub comma: Option<Id>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTFunctionReturnType {
+    pub arrow: Id,
+    pub typename: Typename,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
 pub struct ASTStruct {
     pub keyword_struct: Id,
     pub name: Id,
@@ -115,33 +142,6 @@ pub struct ASTStructField {
     pub colon: Id,
     pub typename: Typename,
     pub semicolon: Id,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct ASTFunctionSignature {
-    pub keyword_fn: Id,
-    pub name: Id,
-    pub paren_open: Id,
-    pub parameters: Vec<ASTFunctionParameter>,
-    pub paren_close: Id,
-    pub return_type: Option<ASTFunctionReturnType>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct ASTFunctionParameter {
-    pub name: Id,
-    pub colon: Id,
-    pub typename: Typename,
-    pub comma: Option<Id>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct ASTFunctionReturnType {
-    pub arrow: Id,
-    pub typename: Typename,
     pub span: Span,
 }
 
@@ -164,6 +164,14 @@ pub enum ASTStatementKind {
     Return(ASTReturn),
     Assignment(ASTAssignment),
     Row(ASTRow),
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTBlock {
+    pub brace_open: Id,
+    pub statements: Vec<ASTStatement>,
+    pub brace_close: Id,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -191,35 +199,12 @@ pub struct ASTLetAssignment {
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct ASTBlock {
-    pub brace_open: Id,
-    pub statements: Vec<ASTStatement>,
-    pub brace_close: Id,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
 pub struct ASTIf {
     pub keyword_if: Id,
     pub expression: ASTExpression,
     pub body_block: ASTBlock,
     pub single_else_ifs: Vec<ASTSingleElseIf>,
     pub single_else: Option<ASTSingleElse>,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct ASTLoop {
-    pub keyword_loop: Id,
-    pub body_block: ASTBlock,
-    pub span: Span,
-}
-
-#[derive(Debug, Clone, Hash)]
-pub struct ASTWhile {
-    pub keyword_while: Id,
-    pub expression: ASTExpression,
-    pub body_block: ASTBlock,
     pub span: Span,
 }
 
@@ -235,6 +220,21 @@ pub struct ASTSingleElseIf {
 #[derive(Debug, Clone, Hash)]
 pub struct ASTSingleElse {
     pub keyword_else: Id,
+    pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTLoop {
+    pub keyword_loop: Id,
+    pub body_block: ASTBlock,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct ASTWhile {
+    pub keyword_while: Id,
+    pub expression: ASTExpression,
     pub body_block: ASTBlock,
     pub span: Span,
 }
@@ -309,9 +309,9 @@ pub enum ASTExpressionKind {
     Call(ASTCallExpression),
     Member(ASTMemberExpression),
     Paren(ASTParenExpression),       // single
-    Literal(Literal),                // single
     IdReference(ASTIdReference),     // single
     StructLiteral(ASTStructLiteral), // single
+    Literal(Literal),                // single
 }
 
 #[derive(Debug, Clone, Hash)]
@@ -376,7 +376,7 @@ pub struct ASTAsExpression {
 pub struct ASTCallExpression {
     pub expression: Box<ASTExpression>,
     pub paren_open: Id,
-    pub arguments: Vec<ASTArgumentExpression>,
+    pub args: Vec<ASTArgExpression>,
     pub paren_close: Id,
     pub span: Span,
 }
@@ -390,7 +390,7 @@ pub struct ASTMemberExpression {
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct ASTArgumentExpression {
+pub struct ASTArgExpression {
     pub expression: ASTExpression,
     pub comma: Option<Id>,
     pub span: Span,

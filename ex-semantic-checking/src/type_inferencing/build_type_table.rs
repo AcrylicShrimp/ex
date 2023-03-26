@@ -300,7 +300,7 @@ fn extract_type_kind(
                 _ => None,
             }
         }
-        TypeConstraintTarget::CallableParameterType { variable, index } => {
+        TypeConstraintTarget::CallableParamType { variable, index } => {
             match type_table.types.get(&reverse_table[variable]) {
                 Some(type_kind) => Some(match type_kind.unwrap_reference() {
                     TypeKind::Callable { params, .. } => params

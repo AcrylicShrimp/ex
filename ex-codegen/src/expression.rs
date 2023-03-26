@@ -32,7 +32,7 @@ pub enum ExpressionKind {
     },
     Call {
         expression: TemporaryId,
-        arguments: Vec<TemporaryId>,
+        args: Vec<TemporaryId>,
     },
     Literal {
         literal: TokenLiteral,
@@ -67,11 +67,8 @@ impl ExpressionKind {
         }
     }
 
-    pub fn call(expression: TemporaryId, arguments: Vec<TemporaryId>) -> Self {
-        Self::Call {
-            expression,
-            arguments,
-        }
+    pub fn call(expression: TemporaryId, args: Vec<TemporaryId>) -> Self {
+        Self::Call { expression, args }
     }
 
     pub fn literal(literal: TokenLiteral) -> Self {

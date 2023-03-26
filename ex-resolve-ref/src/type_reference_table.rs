@@ -35,7 +35,7 @@ pub enum TypeKind {
     Float,
     String,
     Callable {
-        parameters: Vec<TypeKind>,
+        params: Vec<TypeKind>,
         return_type: Box<TypeKind>,
     },
     UserTypeStruct {
@@ -74,9 +74,9 @@ impl TypeKind {
         Self::String
     }
 
-    pub fn callable(parameters: Vec<TypeKind>, return_type: TypeKind) -> Self {
+    pub fn callable(params: Vec<TypeKind>, return_type: TypeKind) -> Self {
         Self::Callable {
-            parameters,
+            params,
             return_type: Box::new(return_type),
         }
     }
@@ -148,17 +148,17 @@ impl Display for TypeKind {
             TypeKind::Float => write!(f, "float"),
             TypeKind::String => write!(f, "string"),
             TypeKind::Callable {
-                parameters,
+                params,
                 return_type,
             } => {
                 write!(f, "fn (")?;
 
-                for (i, parameter) in parameters.iter().enumerate() {
+                for (i, param) in params.iter().enumerate() {
                     if i > 0 {
                         write!(f, ", ")?;
                     }
 
-                    write!(f, "{}", parameter)?;
+                    write!(f, "{}", param)?;
                 }
 
                 write!(f, ") -> {}", return_type)

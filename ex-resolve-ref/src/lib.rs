@@ -89,14 +89,14 @@ pub fn resolve_ast(
                     top_level.id,
                     ast.signature.name,
                     ast.signature
-                        .parameters
+                        .params
                         .iter()
-                        .map(|parameter| parameter.name)
+                        .map(|param| param.name)
                         .collect(),
                     ast.signature
-                        .parameters
+                        .params
                         .iter()
-                        .map(|parameter| parameter.typename.clone())
+                        .map(|param| param.typename.clone())
                         .collect(),
                     ast.signature
                         .return_type
@@ -173,7 +173,7 @@ pub fn resolve_ast(
     let mut assignment_lhs_table = AssignmentLhsTable::new();
 
     for ast in functions {
-        check_function_duplicated_parameters(ast, file, diagnostics);
+        check_function_duplicated_params(ast, file, diagnostics);
 
         let scope_table = function_table
             .lookup_scope(ast.signature.name.symbol)
@@ -229,23 +229,23 @@ pub fn resolve_ast(
     )
 }
 
-fn check_function_duplicated_parameters(
+fn check_function_duplicated_params(
     ast: &ASTFunction,
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
-    let mut parameters = HashMap::<Symbol, Span>::new();
+    let mut params = HashMap::<Symbol, Span>::new();
 
-    for parameter in &ast.signature.parameters {
-        match parameters.entry(parameter.name.symbol) {
+    for param in &ast.signature.params {
+        match params.entry(param.name.symbol) {
             Entry::Occupied(entry) => {
                 diagnostics
                     .send(Diagnostics {
                         level: DiagnosticsLevel::Error,
-                        message: format!("duplicated parameter {}", parameter.name.symbol),
+                        message: format!("duplicated param {}", param.name.symbol),
                         origin: Some(DiagnosticsOrigin {
                             file: file.clone(),
-                            span: parameter.name.span,
+                            span: param.name.span,
                         }),
                         sub_diagnostics: vec![SubDiagnostics {
                             level: DiagnosticsLevel::Hint,
@@ -259,7 +259,7 @@ fn check_function_duplicated_parameters(
                     .unwrap();
             }
             Entry::Vacant(entry) => {
-                entry.insert(parameter.span);
+                entry.insert(param.span);
             }
         }
     }
@@ -399,11 +399,11 @@ fn resolve_scopes(
     let mut scope_table = FunctionScopeTable::new(function.node);
     let scopes = scope_table.scope_mut(scope_table.root);
 
-    for (index, parameter) in ast.signature.parameters.iter().enumerate() {
+    for (index, param) in ast.signature.params.iter().enumerate() {
         scopes.symbol_table.symbols.push(SymbolNode::new(
-            SymbolNodeKind::parameter(index),
+            SymbolNodeKind::param(index),
             function.node,
-            parameter.name,
+            param.name,
         ));
     }
 
@@ -597,14 +597,8 @@ fn resolve_scopes_expression(
         ASTExpressionKind::Call(expr_call) => {
             resolve_scopes_expression(scope, scope_table, &expr_call.expression, file, diagnostics);
 
-            for argument in &expr_call.arguments {
-                resolve_scopes_expression(
-                    scope,
-                    scope_table,
-                    &argument.expression,
-                    file,
-                    diagnostics,
-                );
+            for arg in &expr_call.args {
+                resolve_scopes_expression(scope, scope_table, &arg.expression, file, diagnostics);
             }
         }
         ASTExpressionKind::Member(expr_member) => {
@@ -866,12 +860,12 @@ fn resolve_symbol_references_expression(
                 diagnostics,
             );
 
-            for argument in &expr_call.arguments {
+            for arg in &expr_call.args {
                 resolve_symbol_references_expression(
                     symbol_reference_table,
                     scope_table,
                     function_table,
-                    &argument.expression,
+                    &arg.expression,
                     file,
                     diagnostics,
                 );
@@ -958,11 +952,11 @@ fn resolve_type_references(
     file: &Arc<SourceFile>,
     diagnostics: &Sender<Diagnostics>,
 ) {
-    for parameter in &ast.signature.parameters {
+    for param in &ast.signature.params {
         resolve_type_reference(
             type_reference_table,
             user_type_table,
-            &parameter.typename,
+            &param.typename,
             file,
             diagnostics,
         );
@@ -1194,11 +1188,11 @@ fn resolve_type_references_expression(
                 diagnostics,
             );
 
-            for argument in &expr_call.arguments {
+            for arg in &expr_call.args {
                 resolve_type_references_expression(
                     type_reference_table,
                     user_type_table,
-                    &argument.expression,
+                    &arg.expression,
                     file,
                     diagnostics,
                 );
@@ -1330,11 +1324,9 @@ fn resolve_type_kind(
         },
         TypenameKind::Callable(function) => TypeKind::callable(
             function
-                .parameters
+                .params
                 .iter()
-                .map(|parameter| {
-                    resolve_type_kind(user_type_table, &parameter.typename, file, diagnostics)
-                })
+                .map(|param| resolve_type_kind(user_type_table, &param.typename, file, diagnostics))
                 .collect(),
             function
                 .return_type
@@ -1499,10 +1491,10 @@ fn resolve_assignment_lhs_expression(
             if let Some(symbol_reference) = symbol_reference_table.references.get(&expr_id_ref.id) {
                 match &symbol_reference.kind {
                     SymbolNodeKind::Function => {}
-                    SymbolNodeKind::Parameter { index } => {
+                    SymbolNodeKind::Param { index } => {
                         assignment_lhs_table
                             .kinds
-                            .insert(ast.id, AssignmentLhsKind::Parameter { index: *index });
+                            .insert(ast.id, AssignmentLhsKind::Param { index: *index });
                         return;
                     }
                     SymbolNodeKind::Variable => {
@@ -1530,7 +1522,7 @@ fn resolve_assignment_lhs_expression(
             }),
             sub_diagnostics: vec![SubDiagnostics {
                 level: DiagnosticsLevel::Hint,
-                message: format!("left-hand side must be a member, a variable or a parameter"),
+                message: format!("left-hand side must be a member, a variable or a param"),
                 origin: None,
             }],
         })
