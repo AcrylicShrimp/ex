@@ -88,10 +88,6 @@ impl Token {
                 TokenKind::Assign => TokenKind::AssignBitXor,
                 _ => return None,
             },
-            TokenKind::BitNot => match next.kind {
-                TokenKind::Assign => TokenKind::AssignBitNot,
-                _ => return None,
-            },
             TokenKind::LogNot => match next.kind {
                 TokenKind::Assign => TokenKind::Ne,
                 _ => return None,
@@ -118,12 +114,12 @@ impl Token {
             | TokenKind::AssignBitOr
             | TokenKind::AssignBitAnd
             | TokenKind::AssignBitXor
-            | TokenKind::AssignBitNot
             | TokenKind::RngInclusive
             | TokenKind::Eq
             | TokenKind::Ne
             | TokenKind::Le
             | TokenKind::Ge
+            | TokenKind::BitNot
             | TokenKind::LogOr
             | TokenKind::LogAnd
             | TokenKind::ModuleMember

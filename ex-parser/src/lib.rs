@@ -869,9 +869,6 @@ fn parse_assignment_or_row(
     } else if let Some(id) = parser.first().kind(TokenKind::AssignShr) {
         parser.consume();
         (id, Some(ASTAssignmentOperatorKind::Shr))
-    } else if let Some(id) = parser.first().kind(TokenKind::AssignBitNot) {
-        parser.consume();
-        (id, Some(ASTAssignmentOperatorKind::BitNot))
     } else {
         let semicolon = if let Some(id) = parser.first().kind(TokenKind::Semicolon) {
             parser.consume();

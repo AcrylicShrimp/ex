@@ -1017,7 +1017,6 @@ fn convert_assignment_op(op: ASTAssignmentOperatorKind) -> AssignmentOperator {
         ASTAssignmentOperatorKind::BitOr => AssignmentOperator::BitOr,
         ASTAssignmentOperatorKind::BitAnd => AssignmentOperator::BitAnd,
         ASTAssignmentOperatorKind::BitXor => AssignmentOperator::BitXor,
-        ASTAssignmentOperatorKind::BitNot => AssignmentOperator::BitNot,
     }
 }
 

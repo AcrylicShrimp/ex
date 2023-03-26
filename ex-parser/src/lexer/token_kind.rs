@@ -29,7 +29,6 @@ pub enum TokenKind {
     AssignBitOr,  // "|="
     AssignBitAnd, // "&="
     AssignBitXor, // "^="
-    AssignBitNot, // "~="
     // Range operators
     Rng,          // ".."
     RngInclusive, // "..="
@@ -91,7 +90,6 @@ impl TokenKind {
             TokenKind::AssignBitOr => *crate::ASSIGN_BIT_OR,
             TokenKind::AssignBitAnd => *crate::ASSIGN_BIT_AND,
             TokenKind::AssignBitXor => *crate::ASSIGN_BIT_XOR,
-            TokenKind::AssignBitNot => *crate::ASSIGN_BIT_NOT,
             TokenKind::Rng => *crate::RNG,
             TokenKind::RngInclusive => *crate::RNG_INCLUSIVE,
             TokenKind::Eq => *crate::EQ,

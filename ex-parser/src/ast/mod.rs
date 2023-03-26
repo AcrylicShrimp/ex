@@ -284,7 +284,6 @@ pub enum ASTAssignmentOperatorKind {
     BitOr,
     BitAnd,
     BitXor,
-    BitNot,
 }
 
 #[derive(Debug, Clone, Hash)]

@@ -116,11 +116,6 @@ impl BuiltInAssignmentOperator {
                     TypeKind::int(),
                     TypeKind::int(),
                 ),
-                (
-                    ASTAssignmentOperatorKind::BitNot,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
             ]),
         }
     }

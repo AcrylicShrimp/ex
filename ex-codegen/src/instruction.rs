@@ -130,5 +130,4 @@ pub enum AssignmentOperator {
     BitOr,
     BitAnd,
     BitXor,
-    BitNot,
 }
