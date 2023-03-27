@@ -354,8 +354,8 @@ fn build_type_contraint_table_stmt_block(
                     &ast.right,
                 );
                 contraint_table.new_constraint(TypeConstraint::subtype(
-                    left_expr_type_var,
-                    TypeConstraintTarget::variable(right_expr_type_var),
+                    right_expr_type_var,
+                    TypeConstraintTarget::variable(left_expr_type_var),
                 ));
             }
             ASTStatementKind::Row(ast) => {
