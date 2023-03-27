@@ -33,13 +33,13 @@ pub struct HIRFunctionSignature {
 #[derive(Debug, Clone, Hash)]
 pub struct HIRFunctionParam {
     pub name: Id,
-    pub type_ref: Option<TypeReference>,
+    pub type_ref: TypeReference,
     pub span: Span,
 }
 
 #[derive(Debug, Clone, Hash)]
 pub struct HIRFunctionReturnType {
-    pub type_ref: Option<TypeReference>,
+    pub type_ref: TypeReference,
     pub span: Span,
 }
 
@@ -79,7 +79,7 @@ pub struct HIRLet {
 
 #[derive(Debug, Clone, Hash)]
 pub struct HIRLetType {
-    pub type_ref: Option<TypeReference>,
+    pub type_ref: TypeReference,
     pub span: Span,
 }
 
@@ -218,7 +218,7 @@ pub enum HIRUnaryOperatorKind {
 #[derive(Debug, Clone, Hash)]
 pub struct HIRAsExpression {
     pub expression: Box<HIRExpression>,
-    pub type_ref: Option<TypeReference>,
+    pub type_ref: TypeReference,
     pub span: Span,
 }
 
@@ -271,7 +271,7 @@ pub struct HIRUnknownRef {
 
 #[derive(Debug, Clone, Hash)]
 pub struct HIRStructLiteral {
-    pub type_ref: Option<TypeReference>,
+    pub type_ref: TypeReference,
     pub fields: Vec<HIRStructLiteralField>,
     pub span: Span,
 }
@@ -820,9 +820,6 @@ pub fn build_hir_expression(
     }
 }
 
-fn typename_to_type_ref(
-    typename: &Typename,
-    reference_table: &ReferenceTable,
-) -> Option<TypeReference> {
-    reference_table.type_references.get(&typename.id).cloned()
+fn typename_to_type_ref(typename: &Typename, reference_table: &ReferenceTable) -> TypeReference {
+    reference_table.type_references[&typename.id].clone()
 }

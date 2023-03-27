@@ -178,6 +178,23 @@ pub fn build_references(
     for top_level in &ast.top_levels {
         match &top_level.kind {
             ASTTopLevelKind::Function(ast) => {
+                for param in &ast.signature.params {
+                    let type_ref =
+                        resolve_type_reference(unresolved_table, &param.typename, diagnostics);
+                    table.type_references.insert(param.typename.id, type_ref);
+                }
+
+                if let Some(return_type) = &ast.signature.return_type {
+                    let type_ref = resolve_type_reference(
+                        unresolved_table,
+                        &return_type.typename,
+                        diagnostics,
+                    );
+                    table
+                        .type_references
+                        .insert(return_type.typename.id, type_ref);
+                }
+
                 let function = unresolved_table.functions.get(&top_level.id).unwrap();
                 let function_scope = build_references_and_scopes(
                     &mut table,
@@ -188,7 +205,13 @@ pub fn build_references(
                 );
                 table.function_scopes.insert(function.id, function_scope);
             }
-            ASTTopLevelKind::Struct(..) => {}
+            ASTTopLevelKind::Struct(ast) => {
+                for field in &ast.fields {
+                    let type_ref =
+                        resolve_type_reference(unresolved_table, &field.typename, diagnostics);
+                    table.type_references.insert(field.typename.id, type_ref);
+                }
+            }
         }
     }
 
@@ -241,6 +264,14 @@ pub fn build_references_and_scopes_stmt_block(
                 );
             }
             ASTStatementKind::Let(ast) => {
+                if let Some(let_type) = &ast.let_type {
+                    let type_ref =
+                        resolve_type_reference(unresolved_table, &let_type.typename, diagnostics);
+                    reference_table
+                        .type_references
+                        .insert(let_type.typename.id, type_ref);
+                }
+
                 if let Some(let_assignment) = &ast.let_assignment {
                     build_references_and_scopes_expression(
                         scope,
@@ -436,11 +467,10 @@ pub fn build_references_and_scopes_expression(
             );
         }
         ASTExpressionKind::As(ast) => {
-            let type_reference =
-                resolve_type_reference(unresolved_table, &ast.typename, diagnostics);
+            let type_ref = resolve_type_reference(unresolved_table, &ast.typename, diagnostics);
             reference_table
                 .type_references
-                .insert(ast.typename.id, type_reference);
+                .insert(ast.typename.id, type_ref);
 
             build_references_and_scopes_expression(
                 scope,
@@ -513,17 +543,16 @@ pub fn build_references_and_scopes_expression(
             }
         }
         ASTExpressionKind::StructLiteral(ast) => {
-            let type_reference =
-                resolve_type_reference(unresolved_table, &ast.typename, diagnostics);
+            let type_ref = resolve_type_reference(unresolved_table, &ast.typename, diagnostics);
 
-            if type_reference.kind.is_user_struct() {
+            if type_ref.kind.is_user_struct() {
                 reference_table
                     .type_references
-                    .insert(ast.typename.id, type_reference);
+                    .insert(ast.typename.id, type_ref);
             } else {
                 diagnostics.error(
                     ast.typename.span,
-                    format!("expected a struct type, found `{}`", type_reference.kind),
+                    format!("expected a struct type, found `{}`", type_ref.kind),
                 );
             }
 
