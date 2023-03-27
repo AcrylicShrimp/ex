@@ -214,7 +214,18 @@ pub fn check_types_stmt_block(
                 }
 
                 match (function.return_type.is_empty(), &ast.expression) {
-                    (true, Some(expression)) => {
+                    (true, Some(_)) => {
+                        diagnostics.error_sub(
+                            statement.span,
+                            format!("this return statement must not have a value"),
+                            vec![diagnostics.sub_hint(
+                                function.span,
+                                format!("the function does not return a value"),
+                            )],
+                        );
+                    }
+                    (true, None) => {}
+                    (false, Some(expression)) => {
                         if let Some(type_kind) = type_table.types.get(&expression.id) {
                             if !TypeKind::is_subtype(type_kind, &function.return_type) {
                                 diagnostics.error_sub(
@@ -231,7 +242,7 @@ pub fn check_types_stmt_block(
                             }
                         }
                     }
-                    (true, None) => {
+                    (false, None) => {
                         diagnostics.error_sub(
                             statement.span,
                             format!("this return statement must have a value"),
@@ -239,17 +250,6 @@ pub fn check_types_stmt_block(
                                 .sub_hint(function.span, format!("the function returns a value"))],
                         );
                     }
-                    (false, Some(_)) => {
-                        diagnostics.error_sub(
-                            statement.span,
-                            format!("this return statement must not have a value"),
-                            vec![diagnostics.sub_hint(
-                                function.span,
-                                format!("the function does not return a value"),
-                            )],
-                        );
-                    }
-                    (false, None) => {}
                 }
             }
             ASTStatementKind::Assignment(ast) => {
