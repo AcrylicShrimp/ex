@@ -136,6 +136,9 @@ pub fn build_unresolved_top_levels(
                     ast.signature.span,
                 );
                 unresolved_top_level_table
+                    .function_symbols
+                    .insert(unresolved_function.name.symbol, unresolved_function.id);
+                unresolved_top_level_table
                     .functions
                     .insert(unresolved_function.id, unresolved_function);
             }
@@ -161,6 +164,10 @@ pub fn build_unresolved_top_levels(
                     field_spans,
                     field_names,
                     top_level.span,
+                );
+                unresolved_top_level_table.user_type_symbols.insert(
+                    unresolved_user_struct.name.symbol,
+                    unresolved_user_struct.id,
                 );
                 unresolved_top_level_table.user_types.insert(
                     unresolved_user_struct.id,
