@@ -233,8 +233,8 @@ fn build_type_contraint_table_stmt_block(
                         &let_assignment.expression,
                     );
                     contraint_table.new_constraint(TypeConstraint::subtype(
-                        type_var,
-                        TypeConstraintTarget::variable(expr_type_var),
+                        expr_type_var,
+                        TypeConstraintTarget::variable(type_var),
                     ));
                 }
             }
