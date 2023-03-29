@@ -6,7 +6,7 @@ use context::Context;
 use ex_diagnostics::DiagnosticsLevel;
 use ex_span::SourceMap;
 use ex_vm::execute;
-use std::sync::{mpsc::channel, Arc};
+use std::sync::mpsc::channel;
 use write_diagnostics::write_diagnostics;
 
 fn main() {
@@ -16,9 +16,9 @@ fn main() {
         let file = source.add_source_file(content, "test.ex", Some("../test/test.ex"));
 
         let (sender, receiver) = channel();
-        let diagnostics = Arc::new(sender);
+        let diagnostics = sender;
 
-        let context = Context::compile(file, diagnostics.clone());
+        let context = Context::compile(file, diagnostics);
         (receiver, vec![context])
     };
 

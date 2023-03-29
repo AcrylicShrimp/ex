@@ -15,11 +15,17 @@ use std::sync::{mpsc::Sender, Arc};
 
 // How about to include token delimiter for error recovery?
 
-pub fn parse_ast(file: Arc<SourceFile>, diagnostics: Arc<Sender<Diagnostics>>) -> ASTProgram {
+pub fn parse_ast(
+    file: Arc<SourceFile>,
+    diagnostics: Arc<Sender<Diagnostics>>,
+) -> (ASTProgram, NodeIdAllocator) {
     let mut id_alloc = NodeIdAllocator::new();
     let token_iter = token_iter(&file);
     let mut parser = Parser::new(token_iter, file.clone(), diagnostics.clone());
-    parse_ast_program(&mut id_alloc, &mut parser, &file, &diagnostics)
+    (
+        parse_ast_program(&mut id_alloc, &mut parser, &file, &diagnostics),
+        id_alloc,
+    )
 }
 
 fn parse_ast_program(

@@ -1,4 +1,5 @@
 use crate::{
+    hir::HIRUnaryOperatorKind,
     resolve::{TopLevelTable, TypeKind},
     type_inferencing::{
         ReverseTypeVariableTable, TypeConstraint, TypeConstraintTable, TypeConstraintTarget,
@@ -39,7 +40,7 @@ pub fn build_type_table(
     constraint_table: TypeConstraintTable,
 ) -> TypeTable {
     let reverse_table = constraint_table.reverse_type_variables;
-    let mut constraints = constraint_table.type_contraints;
+    let mut constraints = constraint_table.type_constraints;
 
     // 1. Collect all equalities.
 
@@ -293,10 +294,19 @@ fn extract_type_kind(
         TypeConstraintTarget::UnaryOperation { operator, right } => {
             let right = type_table.types.get(&reverse_table[right]);
             match right {
-                Some(right) => BUILT_IN_UNARY_OPERATOR
-                    .result_type(*operator, right.unwrap_reference().clone())
-                    .cloned()
-                    .or_else(|| Some(TypeKind::unknown())),
+                Some(right) => match operator {
+                    HIRUnaryOperatorKind::AddressOf => {
+                        Some(TypeKind::pointer(right.unwrap_reference().clone()))
+                    }
+                    HIRUnaryOperatorKind::Dereference => Some(match right.unwrap_reference() {
+                        TypeKind::Pointer { inner } => TypeKind::reference(*inner.clone()),
+                        _ => TypeKind::unknown(),
+                    }),
+                    _ => BUILT_IN_UNARY_OPERATOR
+                        .result_type(*operator, right.unwrap_reference().clone())
+                        .cloned()
+                        .or_else(|| Some(TypeKind::unknown())),
+                },
                 _ => None,
             }
         }
@@ -331,21 +341,6 @@ fn extract_type_kind(
                             None => TypeKind::unknown(),
                         }
                     }
-                    _ => TypeKind::unknown(),
-                }),
-                None => None,
-            }
-        }
-        TypeConstraintTarget::AddressOfType { variable } => {
-            match type_table.types.get(&reverse_table[variable]) {
-                Some(type_kind) => Some(TypeKind::pointer(type_kind.unwrap_reference().clone())),
-                None => None,
-            }
-        }
-        TypeConstraintTarget::DereferenceType { variable } => {
-            match type_table.types.get(&reverse_table[variable]) {
-                Some(type_kind) => Some(match type_kind.unwrap_reference() {
-                    TypeKind::Pointer { inner } => TypeKind::reference(*inner.clone()),
                     _ => TypeKind::unknown(),
                 }),
                 None => None,

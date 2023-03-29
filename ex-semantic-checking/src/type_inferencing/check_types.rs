@@ -1,11 +1,9 @@
 use crate::{
-    resolve::{Function, TopLevelTable, TypeKind},
-    type_inferencing::{TypeTable, BUILT_IN_ASSIGNMENT_OPERATOR},
+    hir::{HIRBlock, HIRExpression, HIRExpressionKind, HIRFunction, HIRProgram, HIRStatementKind},
+    resolve::{TopLevelTable, TypeKind},
+    type_inferencing::TypeTable,
 };
 use ex_diagnostics::DiagnosticsSender;
-use ex_parser::{
-    ASTBlock, ASTExpression, ASTExpressionKind, ASTProgram, ASTStatementKind, ASTTopLevelKind,
-};
 use ex_span::Span;
 use ex_symbol::Symbol;
 use std::collections::{hash_map::Entry, HashMap};
@@ -13,44 +11,37 @@ use std::collections::{hash_map::Entry, HashMap};
 pub fn check_types(
     type_table: &TypeTable,
     top_level_table: &TopLevelTable,
-    ast: &ASTProgram,
+    hir: &HIRProgram,
     diagnostics: &DiagnosticsSender,
 ) {
-    for top_level in &ast.top_levels {
-        match &top_level.kind {
-            ASTTopLevelKind::Function(ast) => {
-                let function = &top_level_table.functions[&top_level.id];
-                check_types_stmt_block(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.body_block,
-                    diagnostics,
-                );
-            }
-            ASTTopLevelKind::Struct(..) => {}
-        }
+    for function in &hir.functions {
+        check_types_stmt_block(
+            type_table,
+            top_level_table,
+            function,
+            &function.body_block,
+            diagnostics,
+        );
     }
 }
 
 pub fn check_types_stmt_block(
     type_table: &TypeTable,
     top_level_table: &TopLevelTable,
-    function: &Function,
-    ast: &ASTBlock,
+    function: &HIRFunction,
+    hir: &HIRBlock,
     diagnostics: &DiagnosticsSender,
 ) {
-    for statement in &ast.statements {
+    for statement in &hir.statements {
         match &statement.kind {
-            ASTStatementKind::Block(ast) => {
-                check_types_stmt_block(type_table, top_level_table, function, ast, diagnostics);
+            HIRStatementKind::Block(hir) => {
+                check_types_stmt_block(type_table, top_level_table, function, hir, diagnostics);
             }
-            ASTStatementKind::Let(ast) => {
-                if let Some(let_assignment) = &ast.let_assignment {
+            HIRStatementKind::Let(hir) => {
+                if let Some(let_assignment) = &hir.let_assignment {
                     check_types_expression(
                         type_table,
                         top_level_table,
-                        function,
                         &let_assignment.expression,
                         diagnostics,
                     );
@@ -60,8 +51,8 @@ pub fn check_types_stmt_block(
                     Some(type_kind) => type_kind,
                     None => {
                         diagnostics.error_sub(
-                            ast.span,
-                            format!("cannot infer type for variable {}", ast.name.symbol),
+                            hir.span,
+                            format!("cannot infer type for variable {}", hir.name.symbol),
                             vec![diagnostics
                                 .sub_hint_simple(format!("consider adding a type annotation"))],
                         );
@@ -69,7 +60,7 @@ pub fn check_types_stmt_block(
                     }
                 };
 
-                if let Some(let_assignment) = &ast.let_assignment {
+                if let Some(let_assignment) = &hir.let_assignment {
                     if let Some(expression_type_kind) =
                         type_table.types.get(&let_assignment.expression.id)
                     {
@@ -79,7 +70,7 @@ pub fn check_types_stmt_block(
                                 format!(
                                     "cannot assign type `{}` to variable {}",
                                     expression_type_kind.display(top_level_table),
-                                    ast.name.symbol
+                                    hir.name.symbol
                                 ),
                                 vec![diagnostics.sub_hint_simple(format!(
                                     "expected type `{}`",
@@ -90,19 +81,13 @@ pub fn check_types_stmt_block(
                     }
                 }
             }
-            ASTStatementKind::If(ast) => {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.expression,
-                    diagnostics,
-                );
+            HIRStatementKind::If(hir) => {
+                check_types_expression(type_table, top_level_table, &hir.expression, diagnostics);
 
-                if let Some(type_kind) = type_table.types.get(&ast.expression.id) {
+                if let Some(type_kind) = type_table.types.get(&hir.expression.id) {
                     if !TypeKind::is_subtype(type_kind, &TypeKind::bool()) {
                         diagnostics.error(
-                            ast.expression.span,
+                            hir.expression.span,
                             format!(
                                 "expected type `{}`, found `{}`",
                                 TypeKind::bool().display(top_level_table),
@@ -116,15 +101,14 @@ pub fn check_types_stmt_block(
                     type_table,
                     top_level_table,
                     function,
-                    &ast.body_block,
+                    &hir.body_block,
                     diagnostics,
                 );
 
-                for ast in &ast.single_else_ifs {
+                for ast in &hir.single_else_ifs {
                     check_types_expression(
                         type_table,
                         top_level_table,
-                        function,
                         &ast.expression,
                         diagnostics,
                     );
@@ -151,7 +135,7 @@ pub fn check_types_stmt_block(
                     );
                 }
 
-                if let Some(ast) = &ast.single_else {
+                if let Some(ast) = &hir.single_else {
                     check_types_stmt_block(
                         type_table,
                         top_level_table,
@@ -161,60 +145,52 @@ pub fn check_types_stmt_block(
                     );
                 }
             }
-            ASTStatementKind::Loop(ast) => {
+            HIRStatementKind::Loop(hir) => {
                 check_types_stmt_block(
                     type_table,
                     top_level_table,
                     function,
-                    &ast.body_block,
+                    &hir.body_block,
                     diagnostics,
                 );
             }
-            ASTStatementKind::While(ast) => {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.expression,
-                    diagnostics,
-                );
+            HIRStatementKind::Break(..) => {}
+            HIRStatementKind::Continue(..) => {}
+            HIRStatementKind::Return(hir) => {
+                if let Some(expression) = &hir.expression {
+                    check_types_expression(type_table, top_level_table, expression, diagnostics);
+                }
 
-                if let Some(type_kind) = type_table.types.get(&ast.expression.id) {
-                    if !TypeKind::is_subtype(type_kind, &TypeKind::bool()) {
-                        diagnostics.error(
-                            ast.expression.span,
-                            format!(
-                                "expected type `{}`, found `{}`",
-                                TypeKind::bool().display(top_level_table),
-                                type_kind.display(top_level_table)
-                            ),
+                match (&function.signature.return_type, &hir.expression) {
+                    (Some(return_type), Some(expression)) => {
+                        if let Some(type_kind) = type_table.types.get(&expression.id) {
+                            if !TypeKind::is_subtype(type_kind, &return_type.type_ref.kind) {
+                                diagnostics.error_sub(
+                                    expression.span,
+                                    format!(
+                                        "return type `{}` is incompatible",
+                                        type_kind.display(top_level_table),
+                                    ),
+                                    // TODO: Do not use `expected type` here, use `subtypes of` instead.
+                                    vec![diagnostics.sub_hint_simple(format!(
+                                        "expected type `{}`",
+                                        return_type.type_ref.kind.display(top_level_table)
+                                    ))],
+                                );
+                            }
+                        }
+                    }
+                    (Some(return_type), None) => {
+                        diagnostics.error_sub(
+                            statement.span,
+                            format!("this return statement must have a value"),
+                            vec![diagnostics.sub_hint(
+                                return_type.span,
+                                format!("the function returns a value"),
+                            )],
                         );
                     }
-                }
-
-                check_types_stmt_block(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.body_block,
-                    diagnostics,
-                );
-            }
-            ASTStatementKind::Break(..) => {}
-            ASTStatementKind::Continue(..) => {}
-            ASTStatementKind::Return(ast) => {
-                if let Some(expression) = &ast.expression {
-                    check_types_expression(
-                        type_table,
-                        top_level_table,
-                        function,
-                        expression,
-                        diagnostics,
-                    );
-                }
-
-                match (function.return_type.is_empty(), &ast.expression) {
-                    (true, Some(_)) => {
+                    (None, Some(_)) => {
                         diagnostics.error_sub(
                             statement.span,
                             format!("this return statement must not have a value"),
@@ -224,100 +200,36 @@ pub fn check_types_stmt_block(
                             )],
                         );
                     }
-                    (true, None) => {}
-                    (false, Some(expression)) => {
-                        if let Some(type_kind) = type_table.types.get(&expression.id) {
-                            if !TypeKind::is_subtype(type_kind, &function.return_type) {
-                                diagnostics.error_sub(
-                                    expression.span,
-                                    format!(
-                                        "return type `{}` is incompatible",
-                                        type_kind.display(top_level_table),
-                                    ),
-                                    vec![diagnostics.sub_hint_simple(format!(
-                                        "expected type `{}`",
-                                        function.return_type.display(top_level_table)
-                                    ))],
-                                );
-                            }
-                        }
-                    }
-                    (false, None) => {
-                        diagnostics.error_sub(
-                            statement.span,
-                            format!("this return statement must have a value"),
-                            vec![diagnostics
-                                .sub_hint(function.span, format!("the function returns a value"))],
-                        );
-                    }
+                    (None, None) => {}
                 }
             }
-            ASTStatementKind::Assignment(ast) => {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.left,
-                    diagnostics,
-                );
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.right,
-                    diagnostics,
-                );
+            HIRStatementKind::Assignment(hir) => {
+                check_types_expression(type_table, top_level_table, &hir.left, diagnostics);
+                check_types_expression(type_table, top_level_table, &hir.right, diagnostics);
 
                 // TODO: We should check if left is a l-value, or has reference type.
 
                 if let (Some(left), Some(right)) = (
-                    type_table.types.get(&ast.left.id),
-                    type_table.types.get(&ast.right.id),
+                    type_table.types.get(&hir.left.id),
+                    type_table.types.get(&hir.right.id),
                 ) {
-                    match ast.operator_kind {
-                        Some(operator) => {
-                            if !BUILT_IN_ASSIGNMENT_OPERATOR.is_supported(
-                                operator,
-                                left.clone(),
-                                right.clone(),
-                            ) {
-                                diagnostics.error(
-                                    ast.span,
-                                    format!(
-                                        "`{}` {} `{}` is not supported",
-                                        left.display(top_level_table),
-                                        ast.operator.symbol,
-                                        right.display(top_level_table)
-                                    ),
-                                );
-                            }
-                        }
-                        None => {
-                            if !TypeKind::is_subtype(right, left) {
-                                diagnostics.error_sub(
-                                    ast.right.span,
-                                    format!(
-                                        "cannot assign incompatible type `{}`",
-                                        right.display(top_level_table)
-                                    ),
-                                    vec![diagnostics.sub_hint_simple(format!(
-                                        "expected type `{}`",
-                                        left.display(top_level_table)
-                                    ))],
-                                );
-                            }
-                        }
+                    if !TypeKind::is_subtype(right, left) {
+                        diagnostics.error_sub(
+                            hir.right.span,
+                            format!(
+                                "cannot assign incompatible type `{}`",
+                                right.display(top_level_table)
+                            ),
+                            vec![diagnostics.sub_hint_simple(format!(
+                                "expected type `{}`",
+                                left.display(top_level_table)
+                            ))],
+                        );
                     }
                 }
             }
-            ASTStatementKind::Row(ast) => {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &ast.expression,
-                    diagnostics,
-                );
+            HIRStatementKind::Row(hir) => {
+                check_types_expression(type_table, top_level_table, &hir.expression, diagnostics);
             }
         }
     }
@@ -326,81 +238,42 @@ pub fn check_types_stmt_block(
 pub fn check_types_expression(
     type_table: &TypeTable,
     top_level_table: &TopLevelTable,
-    function: &Function,
-    ast: &ASTExpression,
+    hir: &HIRExpression,
     diagnostics: &DiagnosticsSender,
 ) {
-    let ast_id = ast.id;
-    match &ast.kind {
-        ASTExpressionKind::Binary(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.left,
-                diagnostics,
-            );
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.right,
-                diagnostics,
-            );
+    let hir_id = hir.id;
+    match &hir.kind {
+        HIRExpressionKind::Binary(hir) => {
+            check_types_expression(type_table, top_level_table, &hir.left, diagnostics);
+            check_types_expression(type_table, top_level_table, &hir.right, diagnostics);
         }
-        ASTExpressionKind::Unary(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.right,
-                diagnostics,
-            );
+        HIRExpressionKind::Unary(hir) => {
+            check_types_expression(type_table, top_level_table, &hir.right, diagnostics);
         }
-        ASTExpressionKind::As(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.expression,
-                diagnostics,
-            );
+        HIRExpressionKind::As(hir) => {
+            check_types_expression(type_table, top_level_table, &hir.expression, diagnostics);
         }
-        ASTExpressionKind::Call(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.expression,
-                diagnostics,
-            );
+        HIRExpressionKind::Call(hir) => {
+            check_types_expression(type_table, top_level_table, &hir.expression, diagnostics);
 
-            for arg in &ast.args {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &arg.expression,
-                    diagnostics,
-                );
+            for arg in &hir.args {
+                check_types_expression(type_table, top_level_table, arg, diagnostics);
             }
 
-            if let Some(type_kind) = type_table.types.get(&ast.expression.id) {
+            if let Some(type_kind) = type_table.types.get(&hir.expression.id) {
                 match type_kind.unwrap_reference() {
                     TypeKind::Callable { params, .. } => {
-                        if params.len() != ast.args.len() {
+                        if params.len() != hir.args.len() {
                             diagnostics.error(
-                                ast.expression.span,
-                                format!("expected {} args, found {}", params.len(), ast.args.len()),
+                                hir.expression.span,
+                                format!("expected {} args, found {}", params.len(), hir.args.len()),
                             );
                         } else {
-                            for (param, arg) in params.iter().zip(ast.args.iter()) {
-                                if let Some(arg_type_kind) =
-                                    type_table.types.get(&arg.expression.id)
-                                {
+                            for (param, arg) in params.iter().zip(hir.args.iter()) {
+                                if let Some(arg_type_kind) = type_table.types.get(&arg.id) {
                                     if !TypeKind::is_subtype(arg_type_kind, param) {
                                         diagnostics.error_sub(
-                                            arg.expression.span,
+                                            arg.span,
                                             format!(
                                                 "cannot pass incompatible type `{}`",
                                                 arg_type_kind.display(top_level_table)
@@ -417,7 +290,7 @@ pub fn check_types_expression(
                     }
                     _ => {
                         diagnostics.error(
-                            ast.expression.span,
+                            hir.expression.span,
                             format!(
                                 "given type `{}` is not callable",
                                 type_kind.display(top_level_table)
@@ -427,25 +300,19 @@ pub fn check_types_expression(
                 }
             }
         }
-        ASTExpressionKind::Member(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.expression,
-                diagnostics,
-            );
+        HIRExpressionKind::Member(hir) => {
+            check_types_expression(type_table, top_level_table, &hir.expression, diagnostics);
 
-            if let Some(type_kind) = type_table.types.get(&ast.expression.id) {
+            if let Some(type_kind) = type_table.types.get(&hir.expression.id) {
                 match type_kind.unwrap_reference() {
                     TypeKind::UserStruct { id } => {
                         let user_struct = top_level_table.user_types[id].as_user_struct().unwrap();
-                        if !user_struct.field_names.contains_key(&ast.member.symbol) {
+                        if !user_struct.field_names.contains_key(&hir.member.symbol) {
                             diagnostics.error_sub(
-                                ast.member.span,
+                                hir.member.span,
                                 format!(
                                     "struct {} does not have a field named {}",
-                                    user_struct.name.symbol, ast.member.symbol
+                                    user_struct.name.symbol, hir.member.symbol
                                 ),
                                 vec![diagnostics.sub_hint(
                                     user_struct.span,
@@ -456,7 +323,7 @@ pub fn check_types_expression(
                     }
                     _ => {
                         diagnostics.error(
-                            ast.expression.span,
+                            hir.expression.span,
                             format!(
                                 "given type `{}` is not a struct",
                                 type_kind.display(top_level_table)
@@ -466,29 +333,16 @@ pub fn check_types_expression(
                 }
             }
         }
-        ASTExpressionKind::Paren(ast) => {
-            check_types_expression(
-                type_table,
-                top_level_table,
-                function,
-                &ast.expression,
-                diagnostics,
-            );
-        }
-        ASTExpressionKind::Literal(..) => {}
-        ASTExpressionKind::IdReference(..) => {}
-        ASTExpressionKind::StructLiteral(ast) => {
-            for field in &ast.fields {
-                check_types_expression(
-                    type_table,
-                    top_level_table,
-                    function,
-                    &field.expression,
-                    diagnostics,
-                );
+        HIRExpressionKind::FunctionRef(..) => {}
+        HIRExpressionKind::ParamRef(..) => {}
+        HIRExpressionKind::VariableRef(..) => {}
+        HIRExpressionKind::UnknownRef(..) => {}
+        HIRExpressionKind::StructLiteral(hir) => {
+            for field in &hir.fields {
+                check_types_expression(type_table, top_level_table, &field.expression, diagnostics);
             }
 
-            if let Some(type_kind) = type_table.types.get(&ast_id) {
+            if let Some(type_kind) = type_table.types.get(&hir_id) {
                 let mut handled_fields = HashMap::<Symbol, Span>::new();
                 let user_struct = if let TypeKind::UserStruct { id } = type_kind {
                     top_level_table.user_types[id].as_user_struct().unwrap()
@@ -496,7 +350,7 @@ pub fn check_types_expression(
                     unreachable!()
                 };
 
-                for field in &ast.fields {
+                for field in &hir.fields {
                     match handled_fields.entry(field.name.symbol) {
                         Entry::Occupied(entry) => {
                             diagnostics.error_sub(
@@ -560,7 +414,7 @@ pub fn check_types_expression(
                 for (field, index) in field_names {
                     if !handled_fields.contains_key(&field) {
                         diagnostics.error_sub(
-                            ast.span,
+                            hir.span,
                             format!("field {} is not set", field),
                             vec![diagnostics.sub_hint(
                                 user_struct.field_spans[index],
@@ -571,9 +425,10 @@ pub fn check_types_expression(
                 }
             }
         }
+        HIRExpressionKind::Literal(..) => {}
     }
 
-    if !type_table.types.contains_key(&ast.id) {
-        diagnostics.error(ast.span, format!("could not infer type for expression"));
+    if !type_table.types.contains_key(&hir.id) {
+        diagnostics.error(hir.span, format!("could not infer type for expression"));
     }
 }

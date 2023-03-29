@@ -1,6 +1,6 @@
 use ex_codegen::{codegen, Program};
 use ex_control_flow_checking::check_control_flow;
-use ex_diagnostics::Diagnostics;
+use ex_diagnostics::{Diagnostics, DiagnosticsSender};
 use ex_optimization::eliminate_dead_code;
 use ex_parser::{parse_ast, ASTProgram};
 use ex_resolve_ref::{
@@ -22,16 +22,46 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn compile(file: Arc<SourceFile>, diagnostics: Arc<Sender<Diagnostics>>) -> Self {
-        let ast = parse_ast(file.clone(), diagnostics.clone());
+    pub fn compile(file: Arc<SourceFile>, diagnostics: Sender<Diagnostics>) -> Self {
+        let old_diagnostics = Arc::new(diagnostics.clone());
+        let (ast, mut id_alloc) = parse_ast(file.clone(), old_diagnostics.clone());
 
+        {
+            use ex_semantic_checking::{
+                build_hir, build_lvalues, build_references, build_top_levels,
+                build_type_constraint_table, build_type_table, build_unresolved_top_levels,
+                check_types,
+            };
+
+            let diagnostics = DiagnosticsSender::new(file.clone(), diagnostics);
+            let unresolved_top_level_table = build_unresolved_top_levels(&ast, &diagnostics);
+            let top_level_table = build_top_levels(&unresolved_top_level_table, &diagnostics);
+            let reference_table = build_references(&unresolved_top_level_table, &ast, &diagnostics);
+            let hir = build_hir(
+                &mut id_alloc,
+                &top_level_table,
+                &reference_table,
+                &ast,
+                &diagnostics,
+            );
+
+            let type_constraint_table =
+                build_type_constraint_table(&top_level_table, &reference_table, &hir);
+            let type_table = build_type_table(&top_level_table, type_constraint_table);
+            check_types(&type_table, &top_level_table, &hir, &diagnostics);
+
+            let lvalue_table = build_lvalues(&reference_table, &type_table, &ast, &diagnostics);
+            // TODO: Check the lvalue_table.
+        }
+
+        // TODO: Replace below with a newly designed semantic checking module.
         let (
             function_table,
             user_type_table,
             symbol_reference_table,
             type_reference_table,
             assignment_lhs_table,
-        ) = resolve_ast(&ast, &file, &diagnostics);
+        ) = resolve_ast(&ast, &file, &old_diagnostics);
 
         let type_table_builder = propagate_type_variables(
             &function_table,
@@ -49,7 +79,7 @@ impl Context {
             &user_type_table,
             &ast,
             &file,
-            &diagnostics,
+            &old_diagnostics,
         );
 
         check_control_flow(
@@ -60,7 +90,7 @@ impl Context {
             &symbol_reference_table,
             &ast,
             &file,
-            &diagnostics,
+            &old_diagnostics,
         );
 
         Self {

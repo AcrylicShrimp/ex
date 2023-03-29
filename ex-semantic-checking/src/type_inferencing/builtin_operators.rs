@@ -1,137 +1,12 @@
-use crate::resolve::TypeKind;
-use ex_parser::{ASTAssignmentOperatorKind, ASTBinaryOperatorKind, ASTUnaryOperatorKind};
+use crate::{
+    hir::{HIRBinaryOperatorKind, HIRUnaryOperatorKind},
+    resolve::TypeKind,
+};
 use lazy_static::lazy_static;
-use std::collections::{HashMap, HashSet};
-
-pub struct BuiltInAssignmentOperator {
-    operators: HashSet<(ASTAssignmentOperatorKind, TypeKind, TypeKind)>,
-}
-
-impl BuiltInAssignmentOperator {
-    pub fn new() -> Self {
-        Self {
-            operators: HashSet::from_iter([
-                (
-                    ASTAssignmentOperatorKind::Add,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Add,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Add,
-                    TypeKind::string(),
-                    TypeKind::string(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Sub,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Sub,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Mul,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Mul,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Mul,
-                    TypeKind::string(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Div,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Div,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Mod,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Mod,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Pow,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Pow,
-                    TypeKind::float(),
-                    TypeKind::float(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Shl,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::Shr,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitOr,
-                    TypeKind::bool(),
-                    TypeKind::bool(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitOr,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitAnd,
-                    TypeKind::bool(),
-                    TypeKind::bool(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitAnd,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-                (
-                    ASTAssignmentOperatorKind::BitXor,
-                    TypeKind::int(),
-                    TypeKind::int(),
-                ),
-            ]),
-        }
-    }
-
-    pub fn is_supported(
-        &self,
-        operator: ASTAssignmentOperatorKind,
-        left: TypeKind,
-        right: TypeKind,
-    ) -> bool {
-        self.operators.contains(&(operator, left, right))
-    }
-}
+use std::collections::HashMap;
 
 pub struct BuiltInBinaryOperator {
-    operators: HashMap<(ASTBinaryOperatorKind, TypeKind, TypeKind), TypeKind>,
+    operators: HashMap<(HIRBinaryOperatorKind, TypeKind, TypeKind), TypeKind>,
 }
 
 impl BuiltInBinaryOperator {
@@ -140,19 +15,19 @@ impl BuiltInBinaryOperator {
             operators: HashMap::from_iter([
                 (
                     (
-                        ASTBinaryOperatorKind::Eq,
+                        HIRBinaryOperatorKind::Eq,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Eq, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Eq, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Eq,
+                        HIRBinaryOperatorKind::Eq,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -160,7 +35,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Eq,
+                        HIRBinaryOperatorKind::Eq,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -168,19 +43,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ne,
+                        HIRBinaryOperatorKind::Ne,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Ne, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Ne, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ne,
+                        HIRBinaryOperatorKind::Ne,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -188,7 +63,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ne,
+                        HIRBinaryOperatorKind::Ne,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -196,19 +71,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Lt,
+                        HIRBinaryOperatorKind::Lt,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Lt, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Lt, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Lt,
+                        HIRBinaryOperatorKind::Lt,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -216,7 +91,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Lt,
+                        HIRBinaryOperatorKind::Lt,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -224,19 +99,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Gt,
+                        HIRBinaryOperatorKind::Gt,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Gt, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Gt, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Gt,
+                        HIRBinaryOperatorKind::Gt,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -244,7 +119,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Gt,
+                        HIRBinaryOperatorKind::Gt,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -252,19 +127,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Le,
+                        HIRBinaryOperatorKind::Le,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Le, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Le, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Le,
+                        HIRBinaryOperatorKind::Le,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -272,7 +147,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Le,
+                        HIRBinaryOperatorKind::Le,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -280,19 +155,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ge,
+                        HIRBinaryOperatorKind::Ge,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Ge, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Ge, TypeKind::int(), TypeKind::int()),
                     TypeKind::bool(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ge,
+                        HIRBinaryOperatorKind::Ge,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -300,7 +175,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Ge,
+                        HIRBinaryOperatorKind::Ge,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
@@ -308,7 +183,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::LogOr,
+                        HIRBinaryOperatorKind::LogOr,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
@@ -316,19 +191,19 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::LogAnd,
+                        HIRBinaryOperatorKind::LogAnd,
                         TypeKind::bool(),
                         TypeKind::bool(),
                     ),
                     TypeKind::bool(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Add, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Add, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Add,
+                        HIRBinaryOperatorKind::Add,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -336,31 +211,31 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Add,
+                        HIRBinaryOperatorKind::Add,
                         TypeKind::string(),
                         TypeKind::string(),
                     ),
                     TypeKind::string(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Sub, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Sub, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Sub,
+                        HIRBinaryOperatorKind::Sub,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
                     TypeKind::float(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Mul, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Mul, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Mul,
+                        HIRBinaryOperatorKind::Mul,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
@@ -368,7 +243,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Mul,
+                        HIRBinaryOperatorKind::Mul,
                         TypeKind::string(),
                         TypeKind::int(),
                     ),
@@ -376,59 +251,59 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Mul,
+                        HIRBinaryOperatorKind::Mul,
                         TypeKind::int(),
                         TypeKind::string(),
                     ),
                     TypeKind::string(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Div, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Div, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Div,
+                        HIRBinaryOperatorKind::Div,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
                     TypeKind::float(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Mod, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Mod, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Mod,
+                        HIRBinaryOperatorKind::Mod,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
                     TypeKind::float(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Pow, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Pow, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::Pow,
+                        HIRBinaryOperatorKind::Pow,
                         TypeKind::float(),
                         TypeKind::float(),
                     ),
                     TypeKind::float(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Shl, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Shl, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
-                    (ASTBinaryOperatorKind::Shr, TypeKind::int(), TypeKind::int()),
+                    (HIRBinaryOperatorKind::Shr, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::BitOr,
+                        HIRBinaryOperatorKind::BitOr,
                         TypeKind::int(),
                         TypeKind::int(),
                     ),
@@ -436,7 +311,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::BitAnd,
+                        HIRBinaryOperatorKind::BitAnd,
                         TypeKind::int(),
                         TypeKind::int(),
                     ),
@@ -444,7 +319,7 @@ impl BuiltInBinaryOperator {
                 ),
                 (
                     (
-                        ASTBinaryOperatorKind::BitXor,
+                        HIRBinaryOperatorKind::BitXor,
                         TypeKind::int(),
                         TypeKind::int(),
                     ),
@@ -456,7 +331,7 @@ impl BuiltInBinaryOperator {
 
     pub fn result_type(
         &self,
-        operator: ASTBinaryOperatorKind,
+        operator: HIRBinaryOperatorKind,
         left: TypeKind,
         right: TypeKind,
     ) -> Option<&TypeKind> {
@@ -465,7 +340,7 @@ impl BuiltInBinaryOperator {
 }
 
 pub struct BuiltInUnaryOperator {
-    operators: HashMap<(ASTUnaryOperatorKind, TypeKind), TypeKind>,
+    operators: HashMap<(HIRUnaryOperatorKind, TypeKind), TypeKind>,
 }
 
 impl BuiltInUnaryOperator {
@@ -473,27 +348,19 @@ impl BuiltInUnaryOperator {
         Self {
             operators: HashMap::from_iter([
                 (
-                    (ASTUnaryOperatorKind::Plus, TypeKind::int()),
+                    (HIRUnaryOperatorKind::Minus, TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
-                    (ASTUnaryOperatorKind::Plus, TypeKind::float()),
+                    (HIRUnaryOperatorKind::Minus, TypeKind::float()),
                     TypeKind::float(),
                 ),
                 (
-                    (ASTUnaryOperatorKind::Minus, TypeKind::int()),
+                    (HIRUnaryOperatorKind::BitNot, TypeKind::int()),
                     TypeKind::int(),
                 ),
                 (
-                    (ASTUnaryOperatorKind::Minus, TypeKind::float()),
-                    TypeKind::float(),
-                ),
-                (
-                    (ASTUnaryOperatorKind::BitNot, TypeKind::int()),
-                    TypeKind::int(),
-                ),
-                (
-                    (ASTUnaryOperatorKind::LogNot, TypeKind::bool()),
+                    (HIRUnaryOperatorKind::LogNot, TypeKind::bool()),
                     TypeKind::bool(),
                 ),
             ]),
@@ -502,7 +369,7 @@ impl BuiltInUnaryOperator {
 
     pub fn result_type(
         &self,
-        operator: ASTUnaryOperatorKind,
+        operator: HIRUnaryOperatorKind,
         operand: TypeKind,
     ) -> Option<&TypeKind> {
         self.operators.get(&(operator, operand))
@@ -510,8 +377,6 @@ impl BuiltInUnaryOperator {
 }
 
 lazy_static! {
-    pub static ref BUILT_IN_ASSIGNMENT_OPERATOR: BuiltInAssignmentOperator =
-        BuiltInAssignmentOperator::new();
     pub static ref BUILT_IN_BINARY_OPERATOR: BuiltInBinaryOperator = BuiltInBinaryOperator::new();
     pub static ref BUILT_IN_UNARY_OPERATOR: BuiltInUnaryOperator = BuiltInUnaryOperator::new();
 }

@@ -158,7 +158,7 @@ impl TypeConstraintTarget {
 pub fn build_type_constraint_table(
     top_level_table: &TopLevelTable,
     reference_table: &ReferenceTable,
-    hir: HIRProgram,
+    hir: &HIRProgram,
 ) -> TypeConstraintTable {
     let mut table = TypeConstraintTable::new();
 
