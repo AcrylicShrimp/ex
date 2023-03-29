@@ -230,6 +230,14 @@ fn build_type_constraint_table_stmt_block(
                     TypeConstraintTarget::concrete(TypeKind::bool()),
                 ));
 
+                build_type_constraint_table_stmt_block(
+                    constraint_table,
+                    top_level_table,
+                    reference_table,
+                    function,
+                    &hir.body_block,
+                );
+
                 for hir in &hir.single_else_ifs {
                     let expr_type_var = build_type_constraint_table_expression(
                         constraint_table,
