@@ -2,7 +2,7 @@ use super::{
     HIRBinaryOperatorKind, HIRBlock, HIRExpression, HIRExpressionKind, HIRFunction,
     HIRFunctionParam, HIRFunctionReturnType, HIRProgram, HIRStatementKind, HIRUnaryOperatorKind,
 };
-use crate::resolve::{TypeKind, TypeReference};
+use crate::resolve::{TopLevelTable, TypeKind, TypeReference};
 use std::fmt::Display;
 
 pub struct HIRSourceBuilder {
@@ -78,14 +78,14 @@ pub enum HIRSourceBuilderElement {
 }
 
 pub trait SourceBuilder {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder;
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder;
 }
 
 impl SourceBuilder for HIRProgram {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(0);
         for function in &self.functions {
-            builder.push_builder(function.build_source(indent));
+            builder.push_builder(function.build_source(indent, top_levels));
             builder.push_line("");
         }
         builder
@@ -93,7 +93,7 @@ impl SourceBuilder for HIRProgram {
 }
 
 impl SourceBuilder for HIRFunction {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
 
         if self.signature.params.is_empty() {
@@ -101,7 +101,7 @@ impl SourceBuilder for HIRFunction {
         } else {
             builder.push_line(format!("fn {}(", self.signature.name.symbol.to_str()));
             for param in &self.signature.params {
-                builder.push_builder(param.build_source(1));
+                builder.push_builder(param.build_source(1, top_levels));
                 builder.push_line(",");
             }
             builder.push_str(")");
@@ -110,36 +110,36 @@ impl SourceBuilder for HIRFunction {
         match &self.signature.return_type {
             Some(return_type) => {
                 builder.push_str(" -> ");
-                builder.push_builder(return_type.build_source(0));
+                builder.push_builder(return_type.build_source(0, top_levels));
             }
             None => {}
         }
 
         builder.push_str(" ");
-        builder.push_builder(self.body_block.build_source(indent));
+        builder.push_builder(self.body_block.build_source(indent, top_levels));
         builder.push_line("");
         builder
     }
 }
 
 impl SourceBuilder for HIRFunctionParam {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
         builder.push_str(self.name.symbol.to_str());
         builder.push_str(": ");
-        builder.push_builder(self.type_ref.build_source(0));
+        builder.push_builder(self.type_ref.build_source(0, top_levels));
         builder
     }
 }
 
 impl SourceBuilder for HIRFunctionReturnType {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
-        self.type_ref.build_source(indent)
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
+        self.type_ref.build_source(indent, top_levels)
     }
 }
 
 impl SourceBuilder for HIRBlock {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut outer_builder = HIRSourceBuilder::new(indent);
         outer_builder.push_line("{");
 
@@ -147,7 +147,7 @@ impl SourceBuilder for HIRBlock {
         for statement in &self.statements {
             match &statement.kind {
                 HIRStatementKind::Block(ast) => {
-                    builder.push_builder(ast.build_source(0));
+                    builder.push_builder(ast.build_source(0, top_levels));
                     builder.push_line("");
                 }
                 HIRStatementKind::Let(ast) => {
@@ -156,39 +156,39 @@ impl SourceBuilder for HIRBlock {
 
                     if let Some(let_type) = &ast.let_type {
                         builder.push_str(": ");
-                        builder.push_builder(let_type.type_ref.build_source(0));
+                        builder.push_builder(let_type.type_ref.build_source(0, top_levels));
                     }
 
                     if let Some(let_assignment) = &ast.let_assignment {
                         builder.push_str(" = ");
-                        builder.push_builder(let_assignment.expression.build_source(0));
+                        builder.push_builder(let_assignment.expression.build_source(0, top_levels));
                     }
 
                     builder.push_line(";");
                 }
                 HIRStatementKind::If(ast) => {
                     builder.push_str("if ");
-                    builder.push_builder(ast.expression.build_source(0));
+                    builder.push_builder(ast.expression.build_source(0, top_levels));
                     builder.push_str(" ");
-                    builder.push_builder(ast.body_block.build_source(0));
+                    builder.push_builder(ast.body_block.build_source(0, top_levels));
 
                     for ast in &ast.single_else_ifs {
                         builder.push_str(" else if ");
-                        builder.push_builder(ast.expression.build_source(0));
+                        builder.push_builder(ast.expression.build_source(0, top_levels));
                         builder.push_str(" ");
-                        builder.push_builder(ast.body_block.build_source(0));
+                        builder.push_builder(ast.body_block.build_source(0, top_levels));
                     }
 
                     if let Some(ast) = &ast.single_else {
                         builder.push_str(" else ");
-                        builder.push_builder(ast.body_block.build_source(0));
+                        builder.push_builder(ast.body_block.build_source(0, top_levels));
                     }
 
                     builder.push_line("");
                 }
                 HIRStatementKind::Loop(ast) => {
                     builder.push_str("loop ");
-                    builder.push_builder(ast.body_block.build_source(0));
+                    builder.push_builder(ast.body_block.build_source(0, top_levels));
                     builder.push_line("");
                 }
                 HIRStatementKind::Break(_) => {
@@ -200,7 +200,7 @@ impl SourceBuilder for HIRBlock {
                 HIRStatementKind::Return(ast) => match &ast.expression {
                     Some(ast) => {
                         builder.push_str("return ");
-                        builder.push_builder(ast.build_source(0));
+                        builder.push_builder(ast.build_source(0, top_levels));
                         builder.push_line(";");
                     }
                     None => {
@@ -208,13 +208,13 @@ impl SourceBuilder for HIRBlock {
                     }
                 },
                 HIRStatementKind::Assignment(ast) => {
-                    builder.push_builder(ast.left.build_source(0));
+                    builder.push_builder(ast.left.build_source(0, top_levels));
                     builder.push_str(" = ");
-                    builder.push_builder(ast.right.build_source(0));
+                    builder.push_builder(ast.right.build_source(0, top_levels));
                     builder.push_line(";");
                 }
                 HIRStatementKind::Row(ast) => {
-                    builder.push_builder(ast.expression.build_source(0));
+                    builder.push_builder(ast.expression.build_source(0, top_levels));
                     builder.push_line(";");
                 }
             }
@@ -227,40 +227,40 @@ impl SourceBuilder for HIRBlock {
 }
 
 impl SourceBuilder for HIRExpression {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
         builder.push_builder(match &self.kind {
             HIRExpressionKind::Binary(ast) => {
                 let mut builder = HIRSourceBuilder::new(indent);
                 builder.push_str("(");
-                builder.push_builder(ast.left.build_source(0));
+                builder.push_builder(ast.left.build_source(0, top_levels));
                 builder.push_str(") ");
-                builder.push_builder(ast.operator_kind.build_source(0));
+                builder.push_builder(ast.operator_kind.build_source(0, top_levels));
                 builder.push_str(" (");
-                builder.push_builder(ast.right.build_source(0));
+                builder.push_builder(ast.right.build_source(0, top_levels));
                 builder.push_str(")");
                 builder
             }
             HIRExpressionKind::Unary(ast) => {
                 let mut builder = HIRSourceBuilder::new(indent);
-                builder.push_builder(ast.operator_kind.build_source(0));
+                builder.push_builder(ast.operator_kind.build_source(0, top_levels));
                 builder.push_str(" (");
-                builder.push_builder(ast.right.build_source(0));
+                builder.push_builder(ast.right.build_source(0, top_levels));
                 builder.push_str(")");
                 builder
             }
             HIRExpressionKind::As(ast) => {
                 let mut builder = HIRSourceBuilder::new(indent);
                 builder.push_str("(");
-                builder.push_builder(ast.expression.build_source(0));
+                builder.push_builder(ast.expression.build_source(0, top_levels));
                 builder.push_str(") as ");
-                builder.push_builder(ast.type_ref.build_source(0));
+                builder.push_builder(ast.type_ref.build_source(0, top_levels));
                 builder
             }
             HIRExpressionKind::Call(ast) => {
                 let mut builder = HIRSourceBuilder::new(indent);
                 builder.push_str("(");
-                builder.push_builder(ast.expression.build_source(0));
+                builder.push_builder(ast.expression.build_source(0, top_levels));
 
                 if ast.args.is_empty() {
                     builder.push_str(")()");
@@ -271,7 +271,7 @@ impl SourceBuilder for HIRExpression {
                 builder.push_builder({
                     let mut builder = HIRSourceBuilder::new(1);
                     for arg in &ast.args {
-                        builder.push_builder(arg.build_source(0));
+                        builder.push_builder(arg.build_source(0, top_levels));
                         builder.push_line(",");
                     }
                     builder
@@ -282,7 +282,7 @@ impl SourceBuilder for HIRExpression {
             HIRExpressionKind::Member(ast) => {
                 let mut builder = HIRSourceBuilder::new(indent);
                 builder.push_str("(");
-                builder.push_builder(ast.expression.build_source(0));
+                builder.push_builder(ast.expression.build_source(0, top_levels));
                 builder.push_str(").");
                 builder.push_str(ast.member.symbol.to_str());
                 builder
@@ -315,7 +315,7 @@ impl SourceBuilder for HIRExpression {
                     for field in &ast.fields {
                         builder.push_str(field.name.symbol.to_str());
                         builder.push_str(": ");
-                        builder.push_builder(field.expression.build_source(0));
+                        builder.push_builder(field.expression.build_source(0, top_levels));
                         builder.push_line(",");
                     }
                     builder
@@ -334,7 +334,7 @@ impl SourceBuilder for HIRExpression {
 }
 
 impl SourceBuilder for HIRBinaryOperatorKind {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, _top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
         builder.push_str(match self {
             HIRBinaryOperatorKind::Eq => "==",
@@ -362,7 +362,7 @@ impl SourceBuilder for HIRBinaryOperatorKind {
 }
 
 impl SourceBuilder for HIRUnaryOperatorKind {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, _top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
         builder.push_str(match self {
             HIRUnaryOperatorKind::Minus => "-",
@@ -376,7 +376,7 @@ impl SourceBuilder for HIRUnaryOperatorKind {
 }
 
 impl SourceBuilder for TypeKind {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         let mut builder = HIRSourceBuilder::new(indent);
         builder.push_builder(match self {
             TypeKind::Unknown => "?".into(),
@@ -391,18 +391,24 @@ impl SourceBuilder for TypeKind {
             } => {
                 let params = params
                     .iter()
-                    .map(|param| param.build_source(0).to_string())
+                    .map(|param| param.build_source(0, top_levels).to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
-                let return_type = return_type.build_source(0).to_string();
+                let return_type = return_type.build_source(0, top_levels).to_string();
                 format!("fn ({}) -> {}", params, return_type).into()
             }
-            TypeKind::UserStruct { id } => format!("[struct id={}]", id.get()).into(),
+            TypeKind::UserStruct { id } => top_levels.user_types[&id]
+                .as_user_struct()
+                .unwrap()
+                .name
+                .symbol
+                .to_str()
+                .into(),
             TypeKind::Pointer { inner } => {
-                format!("({}) ptr", inner.build_source(0).to_string()).into()
+                format!("({}) ptr", inner.build_source(0, top_levels).to_string()).into()
             }
             TypeKind::Reference { inner } => {
-                format!("({}) ref", inner.build_source(0).to_string()).into()
+                format!("({}) ref", inner.build_source(0, top_levels).to_string()).into()
             }
         });
         builder
@@ -410,15 +416,15 @@ impl SourceBuilder for TypeKind {
 }
 
 impl SourceBuilder for TypeReference {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
-        self.kind.build_source(indent)
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
+        self.kind.build_source(indent, top_levels)
     }
 }
 
 impl SourceBuilder for Option<TypeReference> {
-    fn build_source(&self, indent: usize) -> HIRSourceBuilder {
+    fn build_source(&self, indent: usize, top_levels: &TopLevelTable) -> HIRSourceBuilder {
         match self {
-            Some(type_ref) => type_ref.build_source(indent),
+            Some(type_ref) => type_ref.build_source(indent, top_levels),
             None => "?".into(),
         }
     }
