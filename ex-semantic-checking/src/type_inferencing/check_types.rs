@@ -195,7 +195,7 @@ pub fn check_types_stmt_block(
                             statement.span,
                             format!("this return statement must not have a value"),
                             vec![diagnostics.sub_hint(
-                                function.span,
+                                function.signature.span,
                                 format!("the function does not return a value"),
                             )],
                         );
