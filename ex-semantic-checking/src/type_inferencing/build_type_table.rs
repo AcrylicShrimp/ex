@@ -186,7 +186,10 @@ pub fn build_type_table(
                 _ => &constraint.from,
             };
 
-            !type_table.types.contains_key(&reverse_table[variable])
+            !type_table
+                .types
+                .contains_key(&reverse_table[&constraint.from])
+                || !type_table.types.contains_key(&reverse_table[variable])
         });
 
         let mut indices = HashSet::new();
