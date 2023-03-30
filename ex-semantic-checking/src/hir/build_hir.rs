@@ -11,6 +11,7 @@ use ex_span::Span;
 #[derive(Debug, Clone, Hash)]
 pub struct HIRProgram {
     pub functions: Vec<HIRFunction>,
+    pub structs: Vec<HIRStruct>,
     pub span: Span,
 }
 
@@ -39,6 +40,21 @@ pub struct HIRFunctionParam {
 
 #[derive(Debug, Clone, Hash)]
 pub struct HIRFunctionReturnType {
+    pub type_ref: TypeReference,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct HIRStruct {
+    pub id: NodeId,
+    pub name: Id,
+    pub fields: Vec<HIRStructField>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, Hash)]
+pub struct HIRStructField {
+    pub name: Id,
     pub type_ref: TypeReference,
     pub span: Span,
 }
@@ -291,46 +307,70 @@ pub fn build_hir(
     diagnostics: &DiagnosticsSender,
 ) -> HIRProgram {
     let mut functions = Vec::new();
+    let mut structs = Vec::new();
 
     for top_level in &ast.top_levels {
         match &top_level.kind {
-            ASTTopLevelKind::Function(ast) => functions.push(HIRFunction {
-                id: top_level.id,
-                signature: HIRFunctionSignature {
-                    name: ast.signature.name,
-                    params: ast
-                        .signature
-                        .params
+            ASTTopLevelKind::Function(ast) => {
+                let item = HIRFunction {
+                    id: top_level.id,
+                    signature: HIRFunctionSignature {
+                        name: ast.signature.name,
+                        params: ast
+                            .signature
+                            .params
+                            .iter()
+                            .map(|param| HIRFunctionParam {
+                                name: param.name,
+                                type_ref: typename_to_type_ref(&param.typename, reference_table),
+                                span: param.span,
+                            })
+                            .collect(),
+                        return_type: ast.signature.return_type.as_ref().map(|return_type| {
+                            HIRFunctionReturnType {
+                                type_ref: typename_to_type_ref(
+                                    &return_type.typename,
+                                    reference_table,
+                                ),
+                                span: return_type.span,
+                            }
+                        }),
+                        span: ast.signature.span,
+                    },
+                    body_block: build_hir_stmt_block(
+                        id_alloc,
+                        top_level_table,
+                        reference_table,
+                        &ast.body_block,
+                        diagnostics,
+                    ),
+                    span: ast.span,
+                };
+                functions.push(item);
+            }
+            ASTTopLevelKind::Struct(ast) => {
+                let item = HIRStruct {
+                    id: top_level.id,
+                    name: ast.name,
+                    fields: ast
+                        .fields
                         .iter()
-                        .map(|param| HIRFunctionParam {
-                            name: param.name,
-                            type_ref: typename_to_type_ref(&param.typename, reference_table),
-                            span: param.span,
+                        .map(|field| HIRStructField {
+                            name: field.name,
+                            type_ref: typename_to_type_ref(&field.typename, reference_table),
+                            span: field.span,
                         })
                         .collect(),
-                    return_type: ast.signature.return_type.as_ref().map(|return_type| {
-                        HIRFunctionReturnType {
-                            type_ref: typename_to_type_ref(&return_type.typename, reference_table),
-                            span: return_type.span,
-                        }
-                    }),
-                    span: ast.signature.span,
-                },
-                body_block: build_hir_stmt_block(
-                    id_alloc,
-                    top_level_table,
-                    reference_table,
-                    &ast.body_block,
-                    diagnostics,
-                ),
-                span: ast.span,
-            }),
-            ASTTopLevelKind::Struct(..) => {}
+                    span: ast.span,
+                };
+                structs.push(item);
+            }
         }
     }
 
     HIRProgram {
         functions,
+        structs,
         span: ast.span,
     }
 }
