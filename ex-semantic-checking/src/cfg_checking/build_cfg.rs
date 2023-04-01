@@ -121,6 +121,15 @@ pub enum BasicBlockInstruction {
     DeallocateStack { type_kind: TypeKind },
 }
 
+impl BasicBlockInstruction {
+    pub fn as_hir_statement(&self) -> Option<Span> {
+        match self {
+            Self::HIRStatement { span } => Some(*span),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Hash)]
 pub struct Scope {
     pub variables: Vec<TypeKind>,

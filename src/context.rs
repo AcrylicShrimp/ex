@@ -28,8 +28,9 @@ impl Context {
 
         {
             use ex_semantic_checking::{
-                build_hir, build_references, build_top_levels, build_type_constraint_table,
-                build_type_table, build_unresolved_top_levels, check_lvalues, check_types,
+                build_cfg, build_hir, build_references, build_top_levels,
+                build_type_constraint_table, build_type_table, build_unresolved_top_levels,
+                check_cfg, check_lvalues, check_types,
             };
 
             let diagnostics = DiagnosticsSender::new(file.clone(), diagnostics);
@@ -49,7 +50,9 @@ impl Context {
             let type_table = build_type_table(&top_level_table, type_constraint_table);
             check_types(&type_table, &top_level_table, &hir, &diagnostics);
             check_lvalues(&type_table, &hir, &diagnostics);
-            // TODO: Check the lvalue_table.
+
+            let mut cfg = build_cfg(&type_table, &hir, &diagnostics);
+            check_cfg(&mut cfg, &top_level_table, &diagnostics);
         }
 
         // TODO: Replace below with a newly designed semantic checking module.
