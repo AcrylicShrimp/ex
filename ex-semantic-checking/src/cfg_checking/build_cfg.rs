@@ -32,7 +32,7 @@ pub struct FunctionControlFlowGraph {
 
 impl FunctionControlFlowGraph {
     pub fn new(id: NodeId, span: Span) -> Self {
-        let entry_block_id = BlockId::new(0);
+        let entry_block_id = BlockId::new(1);
         let entry_block = BasicBlock::new(entry_block_id);
 
         let blocks = HashMap::from_iter(vec![(entry_block_id, entry_block)]);
@@ -44,7 +44,7 @@ impl FunctionControlFlowGraph {
             exit_block_id: None,
             blocks,
             stack_allocations: Vec::new(),
-            next_id: 0,
+            next_id: 1,
         }
     }
 
