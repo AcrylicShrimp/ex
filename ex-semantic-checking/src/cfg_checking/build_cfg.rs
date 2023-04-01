@@ -1,7 +1,6 @@
 use crate::{
-    resolve::{ReferenceTable, TopLevelTable, TypeKind},
-    type_inferencing::TypeTable,
-    HIRBlock, HIRFunction, HIRIf, HIRLoop, HIRProgram, HIRStatementKind,
+    resolve::TypeKind, type_inferencing::TypeTable, HIRBlock, HIRFunction, HIRIf, HIRLoop,
+    HIRProgram, HIRStatementKind,
 };
 use ex_diagnostics::DiagnosticsSender;
 use ex_parser::NodeId;
@@ -135,8 +134,6 @@ pub struct LoopContext {
 }
 
 pub fn build_cfg(
-    top_level_table: &TopLevelTable,
-    reference_table: &ReferenceTable,
     type_table: &TypeTable,
     hir: &HIRProgram,
     diagnostics: &DiagnosticsSender,
@@ -144,13 +141,7 @@ pub fn build_cfg(
     let mut cfg = ControlFlowGraph::new();
 
     for function in &hir.functions {
-        let function_cfg = build_cfg_function(
-            top_level_table,
-            reference_table,
-            type_table,
-            &function,
-            diagnostics,
-        );
+        let function_cfg = build_cfg_function(type_table, &function, diagnostics);
         cfg.functions.insert(function.id, function_cfg);
     }
 
@@ -158,8 +149,6 @@ pub fn build_cfg(
 }
 
 fn build_cfg_function(
-    top_level_table: &TopLevelTable,
-    reference_table: &ReferenceTable,
     type_table: &TypeTable,
     hir: &HIRFunction,
     diagnostics: &DiagnosticsSender,
@@ -171,8 +160,6 @@ fn build_cfg_function(
         &mut cfg,
         &mut scope_stack,
         None,
-        top_level_table,
-        reference_table,
         type_table,
         &hir.body_block,
         diagnostics,
@@ -190,8 +177,6 @@ fn build_cfg_stmt_block(
     cfg: &mut FunctionControlFlowGraph,
     scope_stack: &mut Vec<Scope>,
     loop_context: Option<&LoopContext>,
-    top_level_table: &TopLevelTable,
-    reference_table: &ReferenceTable,
     type_table: &TypeTable,
     hir: &HIRBlock,
     diagnostics: &DiagnosticsSender,
@@ -210,8 +195,6 @@ fn build_cfg_stmt_block(
                     cfg,
                     scope_stack,
                     loop_context,
-                    top_level_table,
-                    reference_table,
                     type_table,
                     hir,
                     diagnostics,
@@ -231,31 +214,16 @@ fn build_cfg_stmt_block(
                 scope_stack.last_mut().unwrap().variables.push(type_kind);
             }
             HIRStatementKind::If(hir) => {
-                let (inner_entry_block_id, inner_exit_block) = build_cfg_stmt_if(
-                    cfg,
-                    scope_stack,
-                    loop_context,
-                    top_level_table,
-                    reference_table,
-                    type_table,
-                    hir,
-                    diagnostics,
-                );
+                let (inner_entry_block_id, inner_exit_block) =
+                    build_cfg_stmt_if(cfg, scope_stack, loop_context, type_table, hir, diagnostics);
                 block.exit = Some(BasicBlockExit::jump(inner_entry_block_id));
                 cfg.insert_block(block);
 
                 block = inner_exit_block;
             }
             HIRStatementKind::Loop(hir) => {
-                let (inner_entry_block_id, inner_exit_block) = build_cfg_stmt_loop(
-                    cfg,
-                    scope_stack,
-                    top_level_table,
-                    reference_table,
-                    type_table,
-                    hir,
-                    diagnostics,
-                );
+                let (inner_entry_block_id, inner_exit_block) =
+                    build_cfg_stmt_loop(cfg, scope_stack, type_table, hir, diagnostics);
                 block.exit = Some(BasicBlockExit::jump(inner_entry_block_id));
                 cfg.insert_block(block);
 
@@ -337,8 +305,6 @@ fn build_cfg_stmt_if(
     cfg: &mut FunctionControlFlowGraph,
     scope_stack: &mut Vec<Scope>,
     loop_context: Option<&LoopContext>,
-    top_level_table: &TopLevelTable,
-    reference_table: &ReferenceTable,
     type_table: &TypeTable,
     hir: &HIRIf,
     diagnostics: &DiagnosticsSender,
@@ -350,8 +316,6 @@ fn build_cfg_stmt_if(
         cfg,
         scope_stack,
         loop_context,
-        top_level_table,
-        reference_table,
         type_table,
         &hir.body_block,
         diagnostics,
@@ -368,8 +332,6 @@ fn build_cfg_stmt_if(
             cfg,
             scope_stack,
             loop_context,
-            top_level_table,
-            reference_table,
             type_table,
             &hir.body_block,
             diagnostics,
@@ -386,8 +348,6 @@ fn build_cfg_stmt_if(
             cfg,
             scope_stack,
             loop_context,
-            top_level_table,
-            reference_table,
             type_table,
             &hir.body_block,
             diagnostics,
@@ -423,8 +383,6 @@ fn build_cfg_stmt_if(
 fn build_cfg_stmt_loop(
     cfg: &mut FunctionControlFlowGraph,
     scope_stack: &mut Vec<Scope>,
-    top_level_table: &TopLevelTable,
-    reference_table: &ReferenceTable,
     type_table: &TypeTable,
     hir: &HIRLoop,
     diagnostics: &DiagnosticsSender,
@@ -442,8 +400,6 @@ fn build_cfg_stmt_loop(
         cfg,
         scope_stack,
         Some(&loop_context),
-        top_level_table,
-        reference_table,
         type_table,
         &hir.body_block,
         diagnostics,
