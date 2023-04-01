@@ -217,9 +217,9 @@ fn build_cfg_stmt_block(
                     diagnostics,
                 );
                 block.exit = Some(BasicBlockExit::jump(inner_entry_block_id));
-                cfg.insert_block(inner_exit_block);
+                cfg.insert_block(block);
 
-                block = cfg.new_block();
+                block = inner_exit_block;
             }
             HIRStatementKind::Let(_) => {
                 let type_kind = type_table
@@ -242,9 +242,9 @@ fn build_cfg_stmt_block(
                     diagnostics,
                 );
                 block.exit = Some(BasicBlockExit::jump(inner_entry_block_id));
-                cfg.insert_block(inner_exit_block);
+                cfg.insert_block(block);
 
-                block = cfg.new_block();
+                block = inner_exit_block;
             }
             HIRStatementKind::Loop(hir) => {
                 let (inner_entry_block_id, inner_exit_block) = build_cfg_stmt_loop(
@@ -257,9 +257,9 @@ fn build_cfg_stmt_block(
                     diagnostics,
                 );
                 block.exit = Some(BasicBlockExit::jump(inner_entry_block_id));
-                cfg.insert_block(inner_exit_block);
+                cfg.insert_block(block);
 
-                block = cfg.new_block();
+                block = inner_exit_block;
             }
             HIRStatementKind::Break(hir) => match loop_context {
                 Some(loop_context) => {
