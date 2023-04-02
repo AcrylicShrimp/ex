@@ -9,29 +9,23 @@ edition = "2021"
 clap = { version = "4" }
 colored = { version = "2" }
 ex-codegen = { path = "ex-codegen" }
-ex-control-flow-checking = { path = "ex-control-flow-checking" }
 ex-diagnostics = { path = "ex-diagnostics" }
 ex-optimization = { path = "ex-optimization" }
 ex-parser = { path = "ex-parser" }
-ex-resolve-ref = { path = "ex-resolve-ref" }
 ex-semantic-checking = { path = "ex-semantic-checking" }
 ex-span = { path = "ex-span" }
 ex-symbol = { path = "ex-symbol" }
-ex-type-checking = { path = "ex-type-checking" }
 ex-vm = { path = "ex-vm" }
 regex = { version = "1" }
 
 [workspace]
 members = [
   "ex-codegen",
-  "ex-control-flow-checking",
   "ex-diagnostics",
   "ex-optimization",
   "ex-parser",
-  "ex-resolve-ref",
   "ex-semantic-checking",
   "ex-span",
   "ex-symbol",
-  "ex-type-checking",
   "ex-vm"
 ]

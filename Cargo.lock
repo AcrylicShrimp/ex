@@ -107,15 +107,12 @@ dependencies = [
  "clap",
  "colored",
  "ex-codegen",
- "ex-control-flow-checking",
  "ex-diagnostics",
  "ex-optimization",
  "ex-parser",
- "ex-resolve-ref",
  "ex-semantic-checking",
  "ex-span",
  "ex-symbol",
- "ex-type-checking",
  "ex-vm",
  "regex",
 ]
@@ -126,22 +123,8 @@ version = "0.1.0"
 dependencies = [
  "ex-diagnostics",
  "ex-parser",
- "ex-resolve-ref",
  "ex-span",
  "ex-symbol",
- "ex-type-checking",
-]
-
-[[package]]
-name = "ex-control-flow-checking"
-version = "0.1.0"
-dependencies = [
- "ex-diagnostics",
- "ex-parser",
- "ex-resolve-ref",
- "ex-span",
- "ex-symbol",
- "ex-type-checking",
 ]
 
 [[package]]
@@ -173,16 +156,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ex-resolve-ref"
-version = "0.1.0"
-dependencies = [
- "ex-diagnostics",
- "ex-parser",
- "ex-span",
- "ex-symbol",
-]
-
-[[package]]
 name = "ex-semantic-checking"
 version = "0.1.0"
 dependencies = [
@@ -207,18 +180,6 @@ dependencies = [
  "lazy_static",
  "parking_lot",
  "rustc-hash",
-]
-
-[[package]]
-name = "ex-type-checking"
-version = "0.1.0"
-dependencies = [
- "ex-diagnostics",
- "ex-parser",
- "ex-resolve-ref",
- "ex-span",
- "ex-symbol",
- "lazy_static",
 ]
 
 [[package]]

@@ -8,7 +8,5 @@ edition = "2021"
 [dependencies]
 ex-diagnostics = { path = "../ex-diagnostics" }
 ex-parser = { path = "../ex-parser" }
-ex-resolve-ref = { path = "../ex-resolve-ref" }
 ex-span = { path = "../ex-span" }
 ex-symbol = { path = "../ex-symbol" }
-ex-type-checking = { path = "../ex-type-checking" }
