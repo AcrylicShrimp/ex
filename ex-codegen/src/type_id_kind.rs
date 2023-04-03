@@ -1,5 +1,4 @@
-use crate::TypeId;
-use ex_parser::NodeId;
+use crate::{TypeId, UserStructId};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum TypeIdKind {
@@ -13,7 +12,7 @@ pub enum TypeIdKind {
         return_type: TypeId,
     },
     UserStruct {
-        id: NodeId,
+        id: UserStructId,
     },
     Pointer {
         type_id: TypeId,

@@ -17,7 +17,7 @@ mod type_id;
 mod type_id_allocator;
 mod type_id_kind;
 mod type_id_table;
-mod user_type_struct;
+mod user_struct;
 mod variable;
 mod variable_id;
 mod variable_id_allocator;
@@ -42,7 +42,7 @@ pub use type_id::*;
 pub use type_id_allocator::*;
 pub use type_id_kind::*;
 pub use type_id_table::*;
-pub use user_type_struct::*;
+pub use user_struct::*;
 pub use variable::*;
 pub use variable_id::*;
 pub use variable_id_allocator::*;
@@ -72,11 +72,12 @@ pub fn codegen(
             type_table,
             function,
         );
-        program.functions.insert(function.name, function);
+        program.functions.insert(function.id, function);
     }
 
     for user_struct in &hir.structs {
-        let user_struct = crate::UserStruct::new(
+        let user_struct = UserStruct::new(
+            user_struct.id,
             user_struct.name.symbol,
             user_struct
                 .fields
@@ -89,7 +90,7 @@ pub fn codegen(
                 })
                 .collect(),
         );
-        program.user_structs.insert(user_struct.name, user_struct);
+        program.user_structs.insert(user_struct.id, user_struct);
     }
 
     program
@@ -103,6 +104,7 @@ fn codegen_function(
     hir: &HIRFunction,
 ) -> Function {
     let mut function = Function::new(
+        hir.id,
         hir.signature.name.symbol,
         hir.signature
             .params
@@ -785,7 +787,9 @@ fn type_kind_to_type_id(type_id_table: &mut TypeIdTable, type_kind: &TypeKind) -
                 .collect(),
             return_type: type_kind_to_type_id(type_id_table, return_type),
         },
-        TypeKind::UserStruct { id } => TypeIdKind::UserStruct { id: *id },
+        TypeKind::UserStruct { id } => TypeIdKind::UserStruct {
+            id: UserStructId::new(*id),
+        },
         TypeKind::Pointer { inner } => TypeIdKind::Pointer {
             type_id: type_kind_to_type_id(type_id_table, inner),
         },

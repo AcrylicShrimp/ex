@@ -1,11 +1,26 @@
 use crate::{
     BasicBlock, BasicBlockTable, BlockId, BlockIdAllocator, TypeId, VariableId, VariableTable,
 };
+use ex_parser::NodeId;
 use ex_symbol::Symbol;
-use std::iter::empty as iter_empty;
+use std::{iter::empty as iter_empty, num::NonZeroU64};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FunctionId(NonZeroU64);
+
+impl FunctionId {
+    pub fn new(id: NodeId) -> Self {
+        Self(NonZeroU64::new(id.get()).unwrap())
+    }
+
+    pub fn get(self) -> u64 {
+        self.0.get()
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct Function {
+    pub id: FunctionId,
     pub name: Symbol,
     pub params: Vec<FunctionParam>,
     pub return_type_id: TypeId,
@@ -16,7 +31,12 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(name: Symbol, param_type_ids: Vec<TypeId>, return_type_id: TypeId) -> Self {
+    pub fn new(
+        id: NodeId,
+        name: Symbol,
+        param_type_ids: Vec<TypeId>,
+        return_type_id: TypeId,
+    ) -> Self {
         let mut variable_table = VariableTable::new();
         let params = param_type_ids
             .into_iter()
@@ -31,6 +51,7 @@ impl Function {
         block_table.blocks.insert(entry_block_id, entry_block);
 
         Self {
+            id: FunctionId::new(id),
             name,
             params,
             return_type_id,

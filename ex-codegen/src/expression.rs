@@ -1,4 +1,4 @@
-use crate::{TemporaryId, TypeId};
+use crate::{FunctionId, TemporaryId, TypeId};
 use ex_parser::{NodeId, TokenLiteral};
 
 #[derive(Debug, Clone, Hash)]
@@ -34,7 +34,7 @@ pub enum ExpressionKind {
         args: Vec<TemporaryId>,
     },
     Function {
-        id: NodeId,
+        id: FunctionId,
     },
     StructLiteral {
         struct_type: TypeId,
@@ -71,7 +71,9 @@ impl ExpressionKind {
     }
 
     pub fn function(id: NodeId) -> Self {
-        Self::Function { id }
+        Self::Function {
+            id: FunctionId::new(id),
+        }
     }
 
     pub fn struct_literal(struct_type: TypeId, fields: Vec<TemporaryId>) -> Self {
