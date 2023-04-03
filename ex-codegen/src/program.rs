@@ -1,12 +1,12 @@
-use crate::{Function, TypeTable, UserTypeStruct};
+use crate::{Function, TypeIdTable, UserStruct};
 use ex_symbol::Symbol;
 use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone)]
 pub struct Program {
+    pub type_id_table: TypeIdTable,
     pub functions: HashMap<Symbol, Function>,
-    pub type_table: TypeTable,
-    pub user_type_struct_table: HashMap<Symbol, UserTypeStruct>,
+    pub user_structs: HashMap<Symbol, UserStruct>,
 }
 
 impl Program {

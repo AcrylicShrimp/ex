@@ -1,19 +1,19 @@
-use crate::{TypeId, TypeIdAllocator, TypeKind};
+use crate::{TypeId, TypeIdAllocator, TypeIdKind};
 use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone)]
-pub struct TypeTable {
-    pub types: HashMap<TypeId, TypeKind>,
-    reverse_types: HashMap<TypeKind, TypeId>,
+pub struct TypeIdTable {
+    pub types: HashMap<TypeId, TypeIdKind>,
+    reverse_types: HashMap<TypeIdKind, TypeId>,
     type_id_allocator: TypeIdAllocator,
 }
 
-impl TypeTable {
+impl TypeIdTable {
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn insert(&mut self, type_kind: TypeKind) -> TypeId {
+    pub fn insert(&mut self, type_kind: TypeIdKind) -> TypeId {
         if let Some(id) = self.reverse_types.get(&type_kind).cloned() {
             return id;
         }

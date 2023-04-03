@@ -123,6 +123,7 @@ version = "0.1.0"
 dependencies = [
  "ex-diagnostics",
  "ex-parser",
+ "ex-semantic-checking",
  "ex-span",
  "ex-symbol",
 ]

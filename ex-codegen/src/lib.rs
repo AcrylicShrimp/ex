@@ -15,8 +15,8 @@ mod temporary_id_allocator;
 mod temporary_table;
 mod type_id;
 mod type_id_allocator;
-mod type_kind;
-mod type_table;
+mod type_id_kind;
+mod type_id_table;
 mod user_type_struct;
 mod variable;
 mod variable_id;
@@ -40,127 +40,92 @@ pub use temporary_id_allocator::*;
 pub use temporary_table::*;
 pub use type_id::*;
 pub use type_id_allocator::*;
-pub use type_kind::*;
-pub use type_table::*;
+pub use type_id_kind::*;
+pub use type_id_table::*;
 pub use user_type_struct::*;
 pub use variable::*;
 pub use variable_id::*;
 pub use variable_id_allocator::*;
 pub use variable_table::*;
 
-use ex_parser::{
-    ASTAssignmentOperatorKind, ASTBinaryOperatorKind, ASTBlock, ASTExpression, ASTExpressionKind,
-    ASTFunction, ASTIf, ASTLoop, ASTProgram, ASTStatementKind, ASTTopLevelKind,
-    ASTUnaryOperatorKind, ASTWhile, NodeId, Typename,
+use ex_parser::NodeId;
+use ex_semantic_checking::{
+    HIRBinaryOperatorKind, HIRBlock, HIRExpression, HIRExpressionKind, HIRFunction, HIRIf, HIRLoop,
+    HIRProgram, HIRStatementKind, HIRUnaryOperatorKind, ReferenceTable, TopLevelTable, TypeKind,
+    TypeTable,
 };
-use ex_resolve_ref::{
-    AssignmentLhsKind, AssignmentLhsTable, Function as NodeFunction, FunctionTable, SymbolNodeKind,
-    SymbolReferenceTable, TypeKind as NodeTypeKind, TypeReferenceTable,
-};
-use ex_symbol::Symbol;
-use ex_type_checking::TypeTable as NodeTypeTable;
 use std::{collections::HashMap, iter::empty as iter_empty};
 
 pub fn codegen(
-    ast: &ASTProgram,
-    function_table: &FunctionTable,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
+    top_level_table: &TopLevelTable,
+    reference_table: &ReferenceTable,
+    type_table: &TypeTable,
+    hir: &HIRProgram,
 ) -> Program {
     let mut program = Program::new();
 
-    for top_level in &ast.top_levels {
-        match &top_level.kind {
-            ASTTopLevelKind::Function(..) => {}
-            ASTTopLevelKind::Struct(ast) => {
-                let user_type_struct = UserTypeStruct::new(
-                    ast.name.symbol,
-                    ast.fields
-                        .iter()
-                        .map(|field| {
-                            UserTypeStructField::new(
-                                field.name.symbol,
-                                typename_to_type_id(
-                                    &mut program.type_table,
-                                    type_reference_table,
-                                    &field.typename,
-                                ),
-                            )
-                        })
-                        .collect(),
-                );
-                program
-                    .user_type_struct_table
-                    .insert(ast.name.symbol, user_type_struct);
-            }
-        }
+    for function in &hir.functions {
+        let function = codegen_function(
+            &mut program.type_id_table,
+            top_level_table,
+            reference_table,
+            type_table,
+            function,
+        );
+        program.functions.insert(function.name, function);
     }
 
-    for top_level in &ast.top_levels {
-        match &top_level.kind {
-            ASTTopLevelKind::Function(ast) => {
-                let function = function_table.functions.get(&top_level.id).unwrap();
-                let function = codegen_function(
-                    &mut program.type_table,
-                    &program.user_type_struct_table,
-                    ast,
-                    function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
-                    assignment_lhs_table,
-                );
-                program.functions.insert(function.name, function);
-            }
-            ASTTopLevelKind::Struct(..) => {}
-        }
+    for user_struct in &hir.structs {
+        let user_struct = crate::UserStruct::new(
+            user_struct.name.symbol,
+            user_struct
+                .fields
+                .iter()
+                .map(|field| {
+                    UserStructField::new(
+                        field.name.symbol,
+                        type_kind_to_type_id(&mut program.type_id_table, &field.type_ref.kind),
+                    )
+                })
+                .collect(),
+        );
+        program.user_structs.insert(user_struct.name, user_struct);
     }
 
     program
 }
 
 fn codegen_function(
-    type_table: &mut TypeTable,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTFunction,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
+    type_id_table: &mut TypeIdTable,
+    top_level_table: &TopLevelTable,
+    reference_table: &ReferenceTable,
+    type_table: &TypeTable,
+    hir: &HIRFunction,
 ) -> Function {
     let mut function = Function::new(
-        ast.signature.name.symbol,
-        ast.signature
+        hir.signature.name.symbol,
+        hir.signature
             .params
             .iter()
-            .map(|param| typename_to_type_id(type_table, type_reference_table, &param.typename))
+            .map(|param| type_kind_to_type_id(type_id_table, &param.type_ref.kind))
             .collect(),
-        ast.signature
+        hir.signature
             .return_type
             .as_ref()
-            .map(|return_type| {
-                typename_to_type_id(type_table, type_reference_table, &return_type.typename)
-            })
-            .unwrap_or_else(|| type_table.insert(TypeKind::Empty)),
+            .map(|return_type| type_kind_to_type_id(type_id_table, &return_type.type_ref.kind))
+            .unwrap_or_else(|| type_id_table.insert(TypeIdKind::Empty)),
     );
-    let mut node_variable_table = HashMap::new();
+    let mut reverse_variable_table = ReverseVariableTable::new();
 
     let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
-        &mut node_variable_table,
-        type_table,
+        type_id_table,
+        &mut reverse_variable_table,
         &mut function,
         None,
-        None,
-        user_type_struct_table,
-        &ast.body_block,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
-        assignment_lhs_table,
+        top_level_table,
+        reference_table,
+        type_table,
+        &hir.body_block,
     );
 
     function
@@ -175,200 +140,162 @@ fn codegen_function(
     function
 }
 
+#[derive(Debug, Clone, Hash)]
+struct LoopContext {
+    pub entry_block_id: BlockId,
+    pub exit_block_id: BlockId,
+}
+
+type ReverseVariableTable = HashMap<NodeId, VariableId>;
+
+// TODO: Add destructor calls, by adding stack count.
 fn codegen_function_stmt_block(
-    node_variable_table: &mut HashMap<NodeId, VariableId>,
-    type_table: &mut TypeTable,
+    type_id_table: &mut TypeIdTable,
+    reverse_variable_table: &mut ReverseVariableTable,
     function: &mut Function,
-    loop_entry_block_id: Option<BlockId>,
-    loop_exit_block_id: Option<BlockId>,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTBlock,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
+    loop_context: Option<&LoopContext>,
+    top_level_table: &TopLevelTable,
+    reference_table: &ReferenceTable,
+    type_table: &TypeTable,
+    hir: &HIRBlock,
 ) -> (BlockId, BasicBlock) {
     let mut block = function.new_block(iter_empty());
     let entry_block_id = block.id;
 
-    for statement in &ast.statements {
+    for statement in &hir.statements {
         match &statement.kind {
-            ASTStatementKind::Block(stmt_block) => {
+            HIRStatementKind::Block(hir) => {
                 let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_block(
-                    node_variable_table,
-                    type_table,
+                    type_id_table,
+                    reverse_variable_table,
                     function,
-                    loop_entry_block_id,
-                    loop_exit_block_id,
-                    user_type_struct_table,
-                    &stmt_block,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
-                    assignment_lhs_table,
+                    loop_context,
+                    top_level_table,
+                    reference_table,
+                    type_table,
+                    hir,
                 );
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
             }
-            ASTStatementKind::Let(stmt_let) => {
-                let type_id = type_kind_to_type_id(
-                    type_table,
-                    node_type_table.types.get(&statement.id).unwrap(),
-                );
+            HIRStatementKind::Let(hir) => {
+                let type_id = type_kind_to_type_id(type_id_table, &type_table.types[&statement.id]);
                 let variable = function.variable_table.insert(type_id);
-                node_variable_table.insert(statement.id, variable);
+                reverse_variable_table.insert(statement.id, variable);
 
-                if let Some(let_assignment) = &stmt_let.let_assignment {
+                if let Some(let_assignment) = &hir.let_assignment {
                     let temporary = codegen_function_expression(
+                        type_id_table,
                         &mut block,
-                        node_variable_table,
-                        type_table,
+                        reverse_variable_table,
                         function,
-                        user_type_struct_table,
+                        top_level_table,
+                        type_table,
                         &let_assignment.expression,
-                        node_function,
-                        node_type_table,
-                        type_reference_table,
-                        symbol_reference_table,
                     );
                     block.new_instruction(InstructionKind::store(
                         Pointer::new(variable, vec![]),
                         temporary,
-                        None,
                     ));
                 }
             }
-            ASTStatementKind::If(stmt_if) => {
+            HIRStatementKind::If(hir) => {
                 let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_if(
-                    node_variable_table,
-                    type_table,
+                    type_id_table,
+                    reverse_variable_table,
                     function,
-                    loop_entry_block_id,
-                    loop_exit_block_id,
-                    user_type_struct_table,
-                    &stmt_if,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
-                    assignment_lhs_table,
+                    loop_context,
+                    top_level_table,
+                    reference_table,
+                    type_table,
+                    hir,
                 );
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
             }
-            ASTStatementKind::Loop(stmt_loop) => {
+            HIRStatementKind::Loop(hir) => {
                 let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_loop(
-                    node_variable_table,
-                    type_table,
+                    type_id_table,
+                    reverse_variable_table,
                     function,
-                    user_type_struct_table,
-                    &stmt_loop,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
-                    assignment_lhs_table,
+                    top_level_table,
+                    reference_table,
+                    type_table,
+                    hir,
                 );
                 block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
             }
-            ASTStatementKind::While(stmt_while) => {
-                let (inner_entry_block_id, inner_exit_block) = codegen_function_stmt_while(
-                    node_variable_table,
-                    type_table,
-                    function,
-                    user_type_struct_table,
-                    &stmt_while,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
-                    assignment_lhs_table,
-                );
-                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
-                function.block_table.insert(block);
-
-                block = inner_exit_block;
-            }
-            ASTStatementKind::Break(..) => {
-                block.new_instruction(InstructionKind::jump(loop_exit_block_id.unwrap(), vec![]));
+            HIRStatementKind::Break(_) => {
+                let loop_context = loop_context.unwrap();
+                block.new_instruction(InstructionKind::jump(loop_context.exit_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = function.new_block(iter_empty());
             }
-            ASTStatementKind::Continue(..) => {
-                block.new_instruction(InstructionKind::jump(loop_entry_block_id.unwrap(), vec![]));
+            HIRStatementKind::Continue(_) => {
+                let loop_context = loop_context.unwrap();
+                block.new_instruction(InstructionKind::jump(loop_context.entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = function.new_block(iter_empty());
             }
-            ASTStatementKind::Return(stmt_return) => {
-                let temporary = stmt_return.expression.as_ref().map(|expression| {
-                    codegen_function_expression(
-                        &mut block,
-                        node_variable_table,
-                        type_table,
-                        function,
-                        user_type_struct_table,
-                        &expression,
-                        node_function,
-                        node_type_table,
-                        type_reference_table,
-                        symbol_reference_table,
-                    )
-                });
-                block.new_instruction(InstructionKind::terminate(temporary));
+            HIRStatementKind::Return(hir) => {
+                match &hir.expression {
+                    Some(expression) => {
+                        let temporary = codegen_function_expression(
+                            type_id_table,
+                            &mut block,
+                            reverse_variable_table,
+                            function,
+                            top_level_table,
+                            type_table,
+                            expression,
+                        );
+                        block.new_instruction(InstructionKind::terminate(Some(temporary)));
+                    }
+                    None => {
+                        block.new_instruction(InstructionKind::terminate(None));
+                    }
+                }
                 function.block_table.insert(block);
 
                 block = function.new_block(iter_empty());
             }
-            ASTStatementKind::Assignment(stmt_assignment) => {
+            HIRStatementKind::Assignment(hir) => {
                 let pointer = lhs_expression_to_pointer(
+                    reverse_variable_table,
                     function,
+                    top_level_table,
                     type_table,
-                    user_type_struct_table,
-                    node_variable_table,
-                    assignment_lhs_table,
-                    &stmt_assignment.left,
+                    &hir.left,
                 );
                 let temporary = codegen_function_expression(
+                    type_id_table,
                     &mut block,
-                    node_variable_table,
-                    type_table,
+                    reverse_variable_table,
                     function,
-                    user_type_struct_table,
-                    &stmt_assignment.right,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
+                    top_level_table,
+                    type_table,
+                    &hir.right,
                 );
-                block.new_instruction(InstructionKind::store(
-                    pointer,
-                    temporary,
-                    stmt_assignment.operator_kind.map(convert_assignment_op),
-                ));
+                block.new_instruction(InstructionKind::store(pointer, temporary));
             }
-            ASTStatementKind::Row(stmt_row) => {
+            HIRStatementKind::Row(hir) => {
                 codegen_function_expression(
+                    type_id_table,
                     &mut block,
-                    node_variable_table,
-                    type_table,
+                    reverse_variable_table,
                     function,
-                    user_type_struct_table,
-                    &stmt_row.expression,
-                    node_function,
-                    node_type_table,
-                    type_reference_table,
-                    symbol_reference_table,
+                    top_level_table,
+                    type_table,
+                    &hir.expression,
                 );
             }
         }
@@ -378,47 +305,36 @@ fn codegen_function_stmt_block(
 }
 
 fn codegen_function_stmt_if(
-    node_variable_table: &mut HashMap<NodeId, VariableId>,
-    type_table: &mut TypeTable,
+    type_id_table: &mut TypeIdTable,
+    reverse_variable_table: &mut ReverseVariableTable,
     function: &mut Function,
-    loop_entry_block_id: Option<BlockId>,
-    loop_exit_block_id: Option<BlockId>,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTIf,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
+    loop_context: Option<&LoopContext>,
+    top_level_table: &TopLevelTable,
+    reference_table: &ReferenceTable,
+    type_table: &TypeTable,
+    hir: &HIRIf,
 ) -> (BlockId, BasicBlock) {
     let mut stack = Vec::new();
 
     let mut block = function.new_block(iter_empty());
     let condition = codegen_function_expression(
+        type_id_table,
         &mut block,
-        node_variable_table,
-        type_table,
+        reverse_variable_table,
         function,
-        user_type_struct_table,
-        &ast.expression,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
+        top_level_table,
+        type_table,
+        &hir.expression,
     );
     let (then_entry_block_id, mut then_exit_block) = codegen_function_stmt_block(
-        node_variable_table,
-        type_table,
+        type_id_table,
+        reverse_variable_table,
         function,
-        loop_entry_block_id,
-        loop_exit_block_id,
-        user_type_struct_table,
-        &ast.body_block,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
-        assignment_lhs_table,
+        loop_context,
+        top_level_table,
+        reference_table,
+        type_table,
+        &hir.body_block,
     );
     let end_block = function.new_block(iter_empty());
     let branch_instruction = block.new_instruction(InstructionKind::branch(
@@ -438,33 +354,26 @@ fn codegen_function_stmt_if(
         end_block,
     ));
 
-    for single_else_if in &ast.single_else_ifs {
+    for hir in &hir.single_else_ifs {
         let mut block = function.new_block(iter_empty());
         let condition = codegen_function_expression(
+            type_id_table,
             &mut block,
-            node_variable_table,
-            type_table,
+            reverse_variable_table,
             function,
-            user_type_struct_table,
-            &single_else_if.expression,
-            node_function,
-            node_type_table,
-            type_reference_table,
-            symbol_reference_table,
+            top_level_table,
+            type_table,
+            &hir.expression,
         );
         let (then_entry_block_id, mut then_exit_block) = codegen_function_stmt_block(
-            node_variable_table,
-            type_table,
+            type_id_table,
+            reverse_variable_table,
             function,
-            loop_entry_block_id,
-            loop_exit_block_id,
-            user_type_struct_table,
-            &single_else_if.body_block,
-            node_function,
-            node_type_table,
-            type_reference_table,
-            symbol_reference_table,
-            assignment_lhs_table,
+            loop_context,
+            top_level_table,
+            reference_table,
+            type_table,
+            &hir.body_block,
         );
         let end_block = function.new_block(iter_empty());
         let branch_instruction = block.new_instruction(InstructionKind::branch(
@@ -485,20 +394,16 @@ fn codegen_function_stmt_if(
         ));
     }
 
-    if let Some(single_else) = &ast.single_else {
+    if let Some(hir) = &hir.single_else {
         let (else_entry_id, mut else_exit_block) = codegen_function_stmt_block(
-            node_variable_table,
-            type_table,
+            type_id_table,
+            reverse_variable_table,
             function,
-            loop_entry_block_id,
-            loop_exit_block_id,
-            user_type_struct_table,
-            &single_else.body_block,
-            node_function,
-            node_type_table,
-            type_reference_table,
-            symbol_reference_table,
-            assignment_lhs_table,
+            loop_context,
+            top_level_table,
+            reference_table,
+            type_table,
+            &hir.body_block,
         );
         let (block, condition, branch_instruction, then_entry_block_id, end_block) =
             stack.last_mut().unwrap();
@@ -547,34 +452,31 @@ fn codegen_function_stmt_if(
 }
 
 fn codegen_function_stmt_loop(
-    node_variable_table: &mut HashMap<NodeId, VariableId>,
-    type_table: &mut TypeTable,
+    type_id_table: &mut TypeIdTable,
+    reverse_variable_table: &mut ReverseVariableTable,
     function: &mut Function,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTLoop,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
+    top_level_table: &TopLevelTable,
+    reference_table: &ReferenceTable,
+    type_table: &TypeTable,
+    hir: &HIRLoop,
 ) -> (BlockId, BasicBlock) {
     let mut entry_block = function.new_block(iter_empty());
     let entry_block_id = entry_block.id;
     let exit_block = function.new_block(iter_empty());
+    let loop_context = LoopContext {
+        entry_block_id,
+        exit_block_id: exit_block.id,
+    };
 
     let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
-        node_variable_table,
-        type_table,
+        type_id_table,
+        reverse_variable_table,
         function,
-        Some(entry_block_id),
-        Some(exit_block.id),
-        user_type_struct_table,
-        &ast.body_block,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
-        assignment_lhs_table,
+        Some(&loop_context),
+        top_level_table,
+        reference_table,
+        type_table,
+        &hir.body_block,
     );
     entry_block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
     function.block_table.insert(entry_block);
@@ -585,162 +487,76 @@ fn codegen_function_stmt_loop(
     (entry_block_id, exit_block)
 }
 
-fn codegen_function_stmt_while(
-    node_variable_table: &mut HashMap<NodeId, VariableId>,
-    type_table: &mut TypeTable,
-    function: &mut Function,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTWhile,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
-    assignment_lhs_table: &AssignmentLhsTable,
-) -> (BlockId, BasicBlock) {
-    let mut entry_block = function.new_block(iter_empty());
-    let condition = codegen_function_expression(
-        &mut entry_block,
-        node_variable_table,
-        type_table,
-        function,
-        user_type_struct_table,
-        &ast.expression,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
-    );
-
-    let entry_block_id = entry_block.id;
-    let exit_block = function.new_block(iter_empty());
-
-    let (inner_entry_block_id, mut inner_exit_block) = codegen_function_stmt_block(
-        node_variable_table,
-        type_table,
-        function,
-        Some(entry_block_id),
-        Some(exit_block.id),
-        user_type_struct_table,
-        &ast.body_block,
-        node_function,
-        node_type_table,
-        type_reference_table,
-        symbol_reference_table,
-        assignment_lhs_table,
-    );
-    entry_block.new_instruction(InstructionKind::branch(
-        condition,
-        inner_entry_block_id,
-        vec![],
-        exit_block.id,
-        vec![],
-    ));
-    function.block_table.insert(entry_block);
-
-    inner_exit_block.new_instruction(InstructionKind::jump(entry_block_id, vec![]));
-    function.block_table.insert(inner_exit_block);
-
-    (entry_block_id, exit_block)
-}
-
 fn codegen_function_expression(
+    type_id_table: &mut TypeIdTable,
     block: &mut BasicBlock,
-    node_variable_table: &mut HashMap<NodeId, VariableId>,
-    type_table: &mut TypeTable,
-    function: &mut Function,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    ast: &ASTExpression,
-    node_function: &NodeFunction,
-    node_type_table: &NodeTypeTable,
-    type_reference_table: &TypeReferenceTable,
-    symbol_reference_table: &SymbolReferenceTable,
+    reverse_variable_table: &ReverseVariableTable,
+    function: &Function,
+    top_level_table: &TopLevelTable,
+    type_table: &TypeTable,
+    hir: &HIRExpression,
 ) -> TemporaryId {
-    match &ast.kind {
-        ASTExpressionKind::Binary(expr_binary) => {
+    let type_id = type_kind_to_type_id(type_id_table, &type_table.types[&hir.id]);
+    let temporary = block.new_temporary(type_id);
+
+    match &hir.kind {
+        HIRExpressionKind::Binary(hir) => {
             let left = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_binary.left,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
+                top_level_table,
+                type_table,
+                &hir.left,
             );
             let right = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_binary.right,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
+                top_level_table,
+                type_table,
+                &hir.right,
             );
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = block.new_temporary(type_id);
             block.new_instruction(InstructionKind::assign(
                 temporary,
                 Expression::new(
-                    ExpressionKind::binary(
-                        convert_binary_op(expr_binary.operator_kind),
-                        left,
-                        right,
-                    ),
+                    ExpressionKind::binary(convert_binary_op(hir.operator_kind), left, right),
                     type_id,
                 ),
             ));
-            temporary
         }
-        ASTExpressionKind::Unary(expr_unary) => {
+        HIRExpressionKind::Unary(hir) => {
             let right = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_unary.right,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
+                top_level_table,
+                type_table,
+                &hir.right,
             );
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = block.new_temporary(type_id);
             block.new_instruction(InstructionKind::assign(
                 temporary,
                 Expression::new(
-                    ExpressionKind::unary(convert_unary_op(expr_unary.operator_kind), right),
+                    ExpressionKind::unary(convert_unary_op(hir.operator_kind), right),
                     type_id,
                 ),
             ));
-            temporary
         }
-        ASTExpressionKind::As(expr_as) => {
+        HIRExpressionKind::As(hir) => {
             let expression = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_as.expression,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
-            );
-            let from_type_id = type_kind_to_type_id(
+                top_level_table,
                 type_table,
-                node_type_table.types.get(&expr_as.expression.id).unwrap(),
+                &hir.expression,
             );
-            let type_id = typename_to_type_id(type_table, type_reference_table, &expr_as.typename);
-            let temporary = block.new_temporary(type_id);
+            let from_type_id =
+                type_kind_to_type_id(type_id_table, &type_table.types[&hir.expression.id]);
             block.new_instruction(InstructionKind::assign(
                 temporary,
                 Expression::new(
@@ -748,195 +564,111 @@ fn codegen_function_expression(
                     type_id,
                 ),
             ));
-            temporary
         }
-        ASTExpressionKind::Call(expr_call) => {
+        HIRExpressionKind::Call(hir) => {
             let expression = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_call.expression,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
+                top_level_table,
+                type_table,
+                &hir.expression,
             );
-            let args = expr_call
+            let args = hir
                 .args
                 .iter()
                 .map(|arg| {
                     codegen_function_expression(
+                        type_id_table,
                         block,
-                        node_variable_table,
-                        type_table,
+                        reverse_variable_table,
                         function,
-                        user_type_struct_table,
-                        &arg.expression,
-                        node_function,
-                        node_type_table,
-                        type_reference_table,
-                        symbol_reference_table,
+                        top_level_table,
+                        type_table,
+                        arg,
                     )
                 })
                 .collect();
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = block.new_temporary(type_id);
             block.new_instruction(InstructionKind::assign(
                 temporary,
                 Expression::new(ExpressionKind::call(expression, args), type_id),
             ));
-            temporary
         }
-        ASTExpressionKind::Member(expr_member) => {
+        HIRExpressionKind::Member(hir) => {
             let expression = codegen_function_expression(
+                type_id_table,
                 block,
-                node_variable_table,
-                type_table,
+                reverse_variable_table,
                 function,
-                user_type_struct_table,
-                &expr_member.expression,
-                node_function,
-                node_type_table,
-                type_reference_table,
-                symbol_reference_table,
-            );
-            let expression_type_id = type_kind_to_type_id(
+                top_level_table,
                 type_table,
-                node_type_table
-                    .types
-                    .get(&expr_member.expression.id)
-                    .unwrap(),
+                &hir.expression,
             );
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = block.new_temporary(type_id);
-            let struct_symbol = type_table
-                .types
-                .get(&expression_type_id)
-                .unwrap()
-                .as_user_type_struct();
-            let index = user_type_struct_table
-                .get(&struct_symbol)
-                .unwrap()
-                .fields
-                .iter()
-                .position(|field| field.name == expr_member.member.symbol)
-                .unwrap();
+            let user_struct = match type_table.types[&hir.expression.id].unwrap_reference() {
+                TypeKind::UserStruct { id } => {
+                    top_level_table.user_types[id].as_user_struct().unwrap()
+                }
+                _ => unreachable!(),
+            };
+            let index = user_struct.field_names[&hir.member.symbol];
             block.new_instruction(InstructionKind::extract(expression, vec![index], temporary));
-            temporary
         }
-        ASTExpressionKind::Paren(expr_paren) => codegen_function_expression(
-            block,
-            node_variable_table,
-            type_table,
-            function,
-            user_type_struct_table,
-            &expr_paren.expression,
-            node_function,
-            node_type_table,
-            type_reference_table,
-            symbol_reference_table,
-        ),
-        ASTExpressionKind::Literal(expr_literal) => {
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let temporary = block.new_temporary(type_id);
+        HIRExpressionKind::FunctionRef(hir) => {
             block.new_instruction(InstructionKind::assign(
                 temporary,
-                Expression::new(
-                    ExpressionKind::literal(expr_literal.literal.clone()),
-                    type_id,
-                ),
+                Expression::new(ExpressionKind::function(hir.function), type_id),
             ));
-            temporary
         }
-        ASTExpressionKind::IdReference(expr_id_ref) => {
-            let symbol_reference = symbol_reference_table
-                .references
-                .get(&expr_id_ref.id)
-                .unwrap();
-            match symbol_reference.kind {
-                SymbolNodeKind::Function => {
-                    let type_id = type_kind_to_type_id(
-                        type_table,
-                        node_type_table.types.get(&ast.id).unwrap(),
-                    );
-                    let temporary = block.new_temporary(type_id);
-                    block.new_instruction(InstructionKind::assign(
-                        temporary,
-                        Expression::new(
-                            ExpressionKind::function(symbol_reference.id.symbol),
-                            type_id,
-                        ),
-                    ));
-                    temporary
-                }
-                SymbolNodeKind::Param { index } => {
-                    let type_id = function.params[index].type_id;
-                    let variable = function.params[index].variable_id;
-                    let temporary = block.new_temporary(type_id);
-                    block.new_instruction(InstructionKind::load(
-                        Pointer::new(variable, vec![]),
-                        temporary,
-                    ));
-                    temporary
-                }
-                SymbolNodeKind::Variable => {
-                    let type_id = type_kind_to_type_id(
-                        type_table,
-                        node_type_table.types.get(&ast.id).unwrap(),
-                    );
-                    let variable = node_variable_table[&symbol_reference.node].clone();
-                    let temporary = block.new_temporary(type_id);
-                    block.new_instruction(InstructionKind::load(
-                        Pointer::new(variable, vec![]),
-                        temporary,
-                    ));
-                    temporary
-                }
-            }
+        HIRExpressionKind::ParamRef(hir) => {
+            let variable = function.params[hir.index].variable_id;
+            block.new_instruction(InstructionKind::load(
+                Pointer::new(variable, vec![]),
+                temporary,
+            ));
         }
-        ASTExpressionKind::StructLiteral(expr_struct_literal) => {
-            let type_id =
-                type_kind_to_type_id(type_table, node_type_table.types.get(&ast.id).unwrap());
-            let struct_symbol = type_table.types[&type_id].as_user_type_struct();
-            let user_type_struct = &user_type_struct_table[&struct_symbol];
-            let mut field_with_indices = expr_struct_literal
+        HIRExpressionKind::VariableRef(hir) => {
+            let variable = reverse_variable_table[&hir.statement];
+            block.new_instruction(InstructionKind::load(
+                Pointer::new(variable, vec![]),
+                temporary,
+            ));
+        }
+        HIRExpressionKind::UnknownRef(..) => {
+            unreachable!()
+        }
+        HIRExpressionKind::StructLiteral(hir) => {
+            let user_struct = match &hir.type_ref.kind {
+                TypeKind::UserStruct { id } => {
+                    top_level_table.user_types[id].as_user_struct().unwrap()
+                }
+                _ => unreachable!(),
+            };
+            let mut fields_with_indices = hir
                 .fields
                 .iter()
                 .map(|field| {
                     (
-                        user_type_struct
-                            .fields
-                            .iter()
-                            .position(|f| f.name == field.name.symbol)
-                            .unwrap(),
+                        user_struct.field_names[&field.name.symbol],
                         codegen_function_expression(
+                            type_id_table,
                             block,
-                            node_variable_table,
-                            type_table,
+                            reverse_variable_table,
                             function,
-                            user_type_struct_table,
+                            top_level_table,
+                            type_table,
                             &field.expression,
-                            node_function,
-                            node_type_table,
-                            type_reference_table,
-                            symbol_reference_table,
                         ),
                     )
                 })
                 .collect::<Vec<_>>();
-            field_with_indices.sort_unstable_by_key(|field| field.0);
-            let temporary = block.new_temporary(type_id);
+            fields_with_indices.sort_unstable_by_key(|field| field.0);
             block.new_instruction(InstructionKind::assign(
                 temporary,
                 Expression::new(
                     ExpressionKind::struct_literal(
                         type_id,
-                        field_with_indices
+                        fields_with_indices
                             .into_iter()
                             .map(|field| field.1)
                             .collect(),
@@ -944,157 +676,122 @@ fn codegen_function_expression(
                     type_id,
                 ),
             ));
-            temporary
+        }
+        HIRExpressionKind::Literal(literal) => {
+            block.new_instruction(InstructionKind::assign(
+                temporary,
+                Expression::new(ExpressionKind::literal(literal.clone()), type_id),
+            ));
         }
     }
+
+    temporary
 }
 
 fn lhs_expression_to_pointer(
+    reverse_variable_table: &ReverseVariableTable,
     function: &Function,
+    top_level_table: &TopLevelTable,
     type_table: &TypeTable,
-    user_type_struct_table: &HashMap<Symbol, UserTypeStruct>,
-    node_variable_table: &HashMap<NodeId, VariableId>,
-    assignment_lhs_table: &AssignmentLhsTable,
-    expr: &ASTExpression,
+    hir: &HIRExpression,
 ) -> Pointer {
-    match &expr.kind {
-        ASTExpressionKind::Member(expr_member) => {
+    match &hir.kind {
+        HIRExpressionKind::Binary(..) => unreachable!(),
+        HIRExpressionKind::Unary(..) => unreachable!(),
+        HIRExpressionKind::As(..) => unreachable!(),
+        HIRExpressionKind::Call(..) => unreachable!(),
+        HIRExpressionKind::Member(hir) => {
             let mut pointer = lhs_expression_to_pointer(
+                reverse_variable_table,
                 function,
+                top_level_table,
                 type_table,
-                user_type_struct_table,
-                node_variable_table,
-                assignment_lhs_table,
-                &expr_member.expression,
+                &hir.expression,
             );
-            let type_id = function.variable_table.variables[&pointer.variable].type_id;
-            let struct_symbol = type_table.types[&type_id].as_user_type_struct();
-            let index = user_type_struct_table
-                .get(&struct_symbol)
-                .unwrap()
-                .fields
-                .iter()
-                .position(|field| field.name == expr_member.member.symbol)
-                .unwrap();
+            let user_struct = match type_table.types[&hir.expression.id].unwrap_reference() {
+                TypeKind::UserStruct { id } => {
+                    top_level_table.user_types[id].as_user_struct().unwrap()
+                }
+                _ => unreachable!(),
+            };
+            let index = user_struct.field_names[&hir.member.symbol];
             pointer.indices.push(index);
             pointer
         }
-        ASTExpressionKind::Paren(expr_paren) => lhs_expression_to_pointer(
-            function,
-            type_table,
-            user_type_struct_table,
-            node_variable_table,
-            assignment_lhs_table,
-            &expr_paren.expression,
-        ),
-        ASTExpressionKind::IdReference(_) => {
-            match assignment_lhs_table.kinds.get(&expr.id).unwrap() {
-                AssignmentLhsKind::Param { index } => {
-                    return Pointer::new(function.params[*index].variable_id, vec![]);
-                }
-                AssignmentLhsKind::Variable { node } => {
-                    return Pointer::new(node_variable_table[node], vec![]);
-                }
-                AssignmentLhsKind::Field { .. } => {
-                    unreachable!()
-                }
-            }
+        HIRExpressionKind::FunctionRef(..) => unreachable!(),
+        HIRExpressionKind::ParamRef(hir) => {
+            let variable = function.params[hir.index].variable_id;
+            Pointer::new(variable, vec![])
         }
-        _ => unreachable!(),
+        HIRExpressionKind::VariableRef(hir) => {
+            let variable = reverse_variable_table[&hir.statement];
+            Pointer::new(variable, vec![])
+        }
+        HIRExpressionKind::UnknownRef(..) => unreachable!(),
+        HIRExpressionKind::StructLiteral(..) => unreachable!(),
+        HIRExpressionKind::Literal(..) => unreachable!(),
     }
 }
 
-fn convert_assignment_op(op: ASTAssignmentOperatorKind) -> AssignmentOperator {
+fn convert_binary_op(op: HIRBinaryOperatorKind) -> BinaryOperator {
     match op {
-        ASTAssignmentOperatorKind::Add => AssignmentOperator::Add,
-        ASTAssignmentOperatorKind::Sub => AssignmentOperator::Sub,
-        ASTAssignmentOperatorKind::Mul => AssignmentOperator::Mul,
-        ASTAssignmentOperatorKind::Div => AssignmentOperator::Div,
-        ASTAssignmentOperatorKind::Mod => AssignmentOperator::Mod,
-        ASTAssignmentOperatorKind::Pow => AssignmentOperator::Pow,
-        ASTAssignmentOperatorKind::Shl => AssignmentOperator::Shl,
-        ASTAssignmentOperatorKind::Shr => AssignmentOperator::Shr,
-        ASTAssignmentOperatorKind::BitOr => AssignmentOperator::BitOr,
-        ASTAssignmentOperatorKind::BitAnd => AssignmentOperator::BitAnd,
-        ASTAssignmentOperatorKind::BitXor => AssignmentOperator::BitXor,
+        HIRBinaryOperatorKind::Eq => BinaryOperator::Eq,
+        HIRBinaryOperatorKind::Ne => BinaryOperator::Ne,
+        HIRBinaryOperatorKind::Lt => BinaryOperator::Lt,
+        HIRBinaryOperatorKind::Gt => BinaryOperator::Gt,
+        HIRBinaryOperatorKind::Le => BinaryOperator::Le,
+        HIRBinaryOperatorKind::Ge => BinaryOperator::Ge,
+        HIRBinaryOperatorKind::LogOr => BinaryOperator::LogOr,
+        HIRBinaryOperatorKind::LogAnd => BinaryOperator::LogAnd,
+        HIRBinaryOperatorKind::Add => BinaryOperator::Add,
+        HIRBinaryOperatorKind::Sub => BinaryOperator::Sub,
+        HIRBinaryOperatorKind::Mul => BinaryOperator::Mul,
+        HIRBinaryOperatorKind::Div => BinaryOperator::Div,
+        HIRBinaryOperatorKind::Mod => BinaryOperator::Mod,
+        HIRBinaryOperatorKind::Pow => BinaryOperator::Pow,
+        HIRBinaryOperatorKind::Shl => BinaryOperator::Shl,
+        HIRBinaryOperatorKind::Shr => BinaryOperator::Shr,
+        HIRBinaryOperatorKind::BitOr => BinaryOperator::BitOr,
+        HIRBinaryOperatorKind::BitAnd => BinaryOperator::BitAnd,
+        HIRBinaryOperatorKind::BitXor => BinaryOperator::BitXor,
     }
 }
 
-fn convert_binary_op(op: ASTBinaryOperatorKind) -> BinaryOperator {
+fn convert_unary_op(op: HIRUnaryOperatorKind) -> UnaryOperator {
     match op {
-        ASTBinaryOperatorKind::Eq => BinaryOperator::Eq,
-        ASTBinaryOperatorKind::Ne => BinaryOperator::Ne,
-        ASTBinaryOperatorKind::Lt => BinaryOperator::Lt,
-        ASTBinaryOperatorKind::Gt => BinaryOperator::Gt,
-        ASTBinaryOperatorKind::Le => BinaryOperator::Le,
-        ASTBinaryOperatorKind::Ge => BinaryOperator::Ge,
-        ASTBinaryOperatorKind::LogOr => BinaryOperator::LogOr,
-        ASTBinaryOperatorKind::LogAnd => BinaryOperator::LogAnd,
-        ASTBinaryOperatorKind::Add => BinaryOperator::Add,
-        ASTBinaryOperatorKind::Sub => BinaryOperator::Sub,
-        ASTBinaryOperatorKind::Mul => BinaryOperator::Mul,
-        ASTBinaryOperatorKind::Div => BinaryOperator::Div,
-        ASTBinaryOperatorKind::Mod => BinaryOperator::Mod,
-        ASTBinaryOperatorKind::Pow => BinaryOperator::Pow,
-        ASTBinaryOperatorKind::Shl => BinaryOperator::Shl,
-        ASTBinaryOperatorKind::Shr => BinaryOperator::Shr,
-        ASTBinaryOperatorKind::BitOr => BinaryOperator::BitOr,
-        ASTBinaryOperatorKind::BitAnd => BinaryOperator::BitAnd,
-        ASTBinaryOperatorKind::BitXor => BinaryOperator::BitXor,
+        HIRUnaryOperatorKind::Minus => UnaryOperator::Minus,
+        HIRUnaryOperatorKind::BitNot => UnaryOperator::BitNot,
+        HIRUnaryOperatorKind::LogNot => UnaryOperator::LogNot,
+        HIRUnaryOperatorKind::AddressOf => UnaryOperator::AddressOf,
+        HIRUnaryOperatorKind::Dereference => UnaryOperator::Dereference,
     }
 }
 
-fn convert_unary_op(op: ASTUnaryOperatorKind) -> UnaryOperator {
-    match op {
-        ASTUnaryOperatorKind::Plus => UnaryOperator::Plus,
-        ASTUnaryOperatorKind::Minus => UnaryOperator::Minus,
-        ASTUnaryOperatorKind::BitNot => UnaryOperator::BitNot,
-        ASTUnaryOperatorKind::LogNot => UnaryOperator::LogNot,
-        ASTUnaryOperatorKind::AddressOf => todo!(),
-        ASTUnaryOperatorKind::Dereference => todo!(),
-    }
-}
-
-fn typename_to_type_id(
-    type_table: &mut TypeTable,
-    type_reference_table: &TypeReferenceTable,
-    typename: &Typename,
-) -> TypeId {
-    type_kind_to_type_id(
-        type_table,
-        &type_reference_table
-            .references
-            .get(&typename.id)
-            .unwrap()
-            .kind,
-    )
-}
-
-fn type_kind_to_type_id(type_table: &mut TypeTable, type_kind: &NodeTypeKind) -> TypeId {
+fn type_kind_to_type_id(type_id_table: &mut TypeIdTable, type_kind: &TypeKind) -> TypeId {
     let type_kind = match type_kind {
-        NodeTypeKind::Unknown => unreachable!(),
-        NodeTypeKind::Empty => TypeKind::Empty,
-        NodeTypeKind::Boolean => TypeKind::Boolean,
-        NodeTypeKind::Integer => TypeKind::Integer,
-        NodeTypeKind::Float => TypeKind::Float,
-        NodeTypeKind::String => TypeKind::String,
-        NodeTypeKind::Callable {
+        TypeKind::Unknown => unreachable!(),
+        TypeKind::Empty => TypeIdKind::Empty,
+        TypeKind::Bool => TypeIdKind::Bool,
+        TypeKind::Int => TypeIdKind::Int,
+        TypeKind::Float => TypeIdKind::Float,
+        TypeKind::String => TypeIdKind::String,
+        TypeKind::Callable {
             params,
             return_type,
-        } => TypeKind::Callable {
+        } => TypeIdKind::Callable {
             params: params
                 .iter()
-                .map(|type_kind| type_kind_to_type_id(type_table, type_kind))
+                .map(|type_kind| type_kind_to_type_id(type_id_table, type_kind))
                 .collect(),
-            return_type: type_kind_to_type_id(type_table, return_type),
+            return_type: type_kind_to_type_id(type_id_table, return_type),
         },
-        NodeTypeKind::UserTypeStruct { symbol } => TypeKind::UserTypeStruct { symbol: *symbol },
-        NodeTypeKind::Pointer { type_kind } => TypeKind::Pointer {
-            type_id: type_kind_to_type_id(type_table, type_kind),
+        TypeKind::UserStruct { id } => TypeIdKind::UserStruct { id: *id },
+        TypeKind::Pointer { inner } => TypeIdKind::Pointer {
+            type_id: type_kind_to_type_id(type_id_table, inner),
         },
-        NodeTypeKind::Reference { type_kind } => TypeKind::Reference {
-            type_id: type_kind_to_type_id(type_table, type_kind),
+        TypeKind::Reference { inner } => TypeIdKind::Reference {
+            type_id: type_kind_to_type_id(type_id_table, inner),
         },
     };
-    type_table.insert(type_kind)
+    type_id_table.insert(type_kind)
 }

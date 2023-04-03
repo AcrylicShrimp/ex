@@ -1,6 +1,5 @@
 use crate::{TemporaryId, TypeId};
-use ex_parser::TokenLiteral;
-use ex_symbol::Symbol;
+use ex_parser::{NodeId, TokenLiteral};
 
 #[derive(Debug, Clone, Hash)]
 pub struct Expression {
@@ -34,15 +33,15 @@ pub enum ExpressionKind {
         expression: TemporaryId,
         args: Vec<TemporaryId>,
     },
-    Literal {
-        literal: TokenLiteral,
+    Function {
+        id: NodeId,
     },
     StructLiteral {
         struct_type: TypeId,
         fields: Vec<TemporaryId>,
     },
-    Function {
-        function: Symbol,
+    Literal {
+        literal: TokenLiteral,
     },
 }
 
@@ -71,8 +70,8 @@ impl ExpressionKind {
         Self::Call { expression, args }
     }
 
-    pub fn literal(literal: TokenLiteral) -> Self {
-        Self::Literal { literal }
+    pub fn function(id: NodeId) -> Self {
+        Self::Function { id }
     }
 
     pub fn struct_literal(struct_type: TypeId, fields: Vec<TemporaryId>) -> Self {
@@ -82,8 +81,8 @@ impl ExpressionKind {
         }
     }
 
-    pub fn function(function: Symbol) -> Self {
-        Self::Function { function }
+    pub fn literal(literal: TokenLiteral) -> Self {
+        Self::Literal { literal }
     }
 }
 
@@ -112,8 +111,9 @@ pub enum BinaryOperator {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UnaryOperator {
-    Plus,
     Minus,
     BitNot,
     LogNot,
+    AddressOf,
+    Dereference,
 }

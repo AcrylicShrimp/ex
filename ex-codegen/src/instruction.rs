@@ -21,7 +21,6 @@ pub enum InstructionKind {
     Store {
         pointer: Pointer,
         temporary: TemporaryId,
-        operator: Option<AssignmentOperator>,
     },
     Assign {
         temporary: TemporaryId,
@@ -53,16 +52,8 @@ impl InstructionKind {
         Self::Load { pointer, temporary }
     }
 
-    pub fn store(
-        pointer: Pointer,
-        temporary: TemporaryId,
-        operator: Option<AssignmentOperator>,
-    ) -> Self {
-        Self::Store {
-            pointer,
-            temporary,
-            operator,
-        }
+    pub fn store(pointer: Pointer, temporary: TemporaryId) -> Self {
+        Self::Store { pointer, temporary }
     }
 
     pub fn assign(temporary: TemporaryId, expression: Expression) -> Self {
@@ -115,19 +106,4 @@ impl Pointer {
     pub fn new(variable: VariableId, indices: Vec<usize>) -> Self {
         Self { variable, indices }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AssignmentOperator {
-    Add,
-    Sub,
-    Mul,
-    Div,
-    Mod,
-    Pow,
-    Shl,
-    Shr,
-    BitOr,
-    BitAnd,
-    BitXor,
 }
