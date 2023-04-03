@@ -3,15 +3,23 @@ mod value;
 pub use value::*;
 
 use ex_codegen::{
-    AssignmentOperator, BinaryOperator, Expression, ExpressionKind, Function, InstructionKind,
-    Program, TemporaryId, TypeKind, UnaryOperator, VariableId,
+    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Program, TemporaryId,
+    TypeIdKind, UnaryOperator, VariableId,
 };
 use ex_symbol::Symbol;
 use std::collections::HashMap;
 
 pub fn execute(program: &Program) {
-    let main_function = match program.functions.get(&Symbol::from_str("main")) {
-        Some(function) => function,
+    let main_function_symbol = Symbol::from_str("main");
+    let main_function_id = program.functions.iter().find_map(|(id, function)| {
+        if function.name == main_function_symbol {
+            Some(id)
+        } else {
+            None
+        }
+    });
+    let main_function = match main_function_id {
+        Some(main_function_index) => &program.functions[main_function_index],
         None => {
             println!("no main function found");
             return;
@@ -72,11 +80,7 @@ fn execute_function(program: &Program, function: &Function, args: Vec<Value>) ->
                         );
                     }
                 }
-                InstructionKind::Store {
-                    pointer,
-                    temporary,
-                    operator,
-                } => {
+                InstructionKind::Store { pointer, temporary } => {
                     let variable = if pointer.indices.is_empty() {
                         stack.get_mut(&pointer.variable).unwrap()
                     } else {
@@ -90,144 +94,7 @@ fn execute_function(program: &Program, function: &Function, args: Vec<Value>) ->
                         &mut variable[pointer.indices[pointer.indices.len() - 1]]
                     };
                     let temporary = &temp_stack[temporary];
-                    match operator {
-                        Some(operator) => match (operator, variable, temporary) {
-                            (
-                                AssignmentOperator::Add,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left += right;
-                            }
-                            (AssignmentOperator::Add, Value::Float(left), Value::Float(right)) => {
-                                *left += right;
-                            }
-                            (
-                                AssignmentOperator::Add,
-                                Value::String(left),
-                                Value::String(right),
-                            ) => {
-                                left.push_str(right);
-                            }
-                            (
-                                AssignmentOperator::Sub,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left -= right;
-                            }
-                            (AssignmentOperator::Sub, Value::Float(left), Value::Float(right)) => {
-                                *left -= right;
-                            }
-                            (
-                                AssignmentOperator::Mul,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left *= right;
-                            }
-                            (AssignmentOperator::Mul, Value::Float(left), Value::Float(right)) => {
-                                *left *= right;
-                            }
-                            (
-                                AssignmentOperator::Mul,
-                                Value::String(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left = left.repeat(*right as usize);
-                            }
-                            (
-                                AssignmentOperator::Div,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left /= right;
-                            }
-                            (AssignmentOperator::Div, Value::Float(left), Value::Float(right)) => {
-                                *left /= right;
-                            }
-                            (
-                                AssignmentOperator::Mod,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left %= right;
-                            }
-                            (AssignmentOperator::Mod, Value::Float(left), Value::Float(right)) => {
-                                *left %= right;
-                            }
-                            (
-                                AssignmentOperator::Pow,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left = left.pow(*right as u32);
-                            }
-                            (AssignmentOperator::Pow, Value::Float(left), Value::Float(right)) => {
-                                *left = left.powf(*right);
-                            }
-                            (
-                                AssignmentOperator::Shl,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left <<= right;
-                            }
-                            (
-                                AssignmentOperator::Shr,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left >>= right;
-                            }
-                            (
-                                AssignmentOperator::BitOr,
-                                Value::Boolean(left),
-                                Value::Boolean(right),
-                            ) => {
-                                *left |= right;
-                            }
-                            (
-                                AssignmentOperator::BitOr,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left |= right;
-                            }
-                            (
-                                AssignmentOperator::BitAnd,
-                                Value::Boolean(left),
-                                Value::Boolean(right),
-                            ) => {
-                                *left &= right;
-                            }
-                            (
-                                AssignmentOperator::BitAnd,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left &= right;
-                            }
-                            (
-                                AssignmentOperator::BitXor,
-                                Value::Boolean(left),
-                                Value::Boolean(right),
-                            ) => {
-                                *left ^= right;
-                            }
-                            (
-                                AssignmentOperator::BitXor,
-                                Value::Integer(left),
-                                Value::Integer(right),
-                            ) => {
-                                *left ^= right;
-                            }
-                            _ => unreachable!(),
-                        },
-                        None => {
-                            *variable = temporary.clone();
-                        }
-                    };
+                    *variable = temporary.clone();
                 }
                 InstructionKind::Assign {
                     temporary,
@@ -469,8 +336,6 @@ fn eval_expression(
         ExpressionKind::Unary { operator, right } => {
             let right = &temp_stack[right];
             match (operator, right) {
-                (UnaryOperator::Plus, Value::Integer(integer)) => Value::Integer(*integer),
-                (UnaryOperator::Plus, Value::Float(float)) => Value::Float(*float),
                 (UnaryOperator::Minus, Value::Integer(integer)) => Value::Integer(-integer),
                 (UnaryOperator::Minus, Value::Float(float)) => Value::Float(-float),
                 (UnaryOperator::BitNot, Value::Integer(integer)) => Value::Integer(!integer),
@@ -485,39 +350,41 @@ fn eval_expression(
         } => {
             let value = temp_stack[expression].clone();
             match (
-                &program.type_table.types[from],
-                &program.type_table.types[to],
+                &program.type_id_table.types[from],
+                &program.type_id_table.types[to],
             ) {
-                (TypeKind::Boolean, TypeKind::Boolean) => value,
-                (TypeKind::Boolean, TypeKind::Integer) => {
+                (TypeIdKind::Bool, TypeIdKind::Bool) => value,
+                (TypeIdKind::Bool, TypeIdKind::Int) => {
                     Value::Integer(if value.as_bool() { 1 } else { 0 })
                 }
-                (TypeKind::Boolean, TypeKind::Float) => {
+                (TypeIdKind::Bool, TypeIdKind::Float) => {
                     Value::Float(if value.as_bool() { 1f64 } else { 0f64 })
                 }
-                (TypeKind::Boolean, TypeKind::String) => {
+                (TypeIdKind::Bool, TypeIdKind::String) => {
                     Value::String(if value.as_bool() { "true" } else { "false" }.to_string())
                 }
-                (TypeKind::Integer, TypeKind::Boolean) => Value::Boolean(value.as_integer() != 0),
-                (TypeKind::Integer, TypeKind::Integer) => value,
-                (TypeKind::Integer, TypeKind::Float) => Value::Float(value.as_integer() as f64),
-                (TypeKind::Integer, TypeKind::String) => {
+                (TypeIdKind::Int, TypeIdKind::Bool) => Value::Boolean(value.as_integer() != 0),
+                (TypeIdKind::Int, TypeIdKind::Int) => value,
+                (TypeIdKind::Int, TypeIdKind::Float) => Value::Float(value.as_integer() as f64),
+                (TypeIdKind::Int, TypeIdKind::String) => {
                     Value::String(value.as_integer().to_string())
                 }
-                (TypeKind::Float, TypeKind::Boolean) => Value::Boolean(value.as_float() != 0f64),
-                (TypeKind::Float, TypeKind::Integer) => Value::Integer(value.as_float() as i64),
-                (TypeKind::Float, TypeKind::Float) => value,
-                (TypeKind::Float, TypeKind::String) => Value::String(value.as_float().to_string()),
-                (TypeKind::String, TypeKind::Boolean) => {
+                (TypeIdKind::Float, TypeIdKind::Bool) => Value::Boolean(value.as_float() != 0f64),
+                (TypeIdKind::Float, TypeIdKind::Int) => Value::Integer(value.as_float() as i64),
+                (TypeIdKind::Float, TypeIdKind::Float) => value,
+                (TypeIdKind::Float, TypeIdKind::String) => {
+                    Value::String(value.as_float().to_string())
+                }
+                (TypeIdKind::String, TypeIdKind::Bool) => {
                     Value::Boolean(value.as_string() != "false")
                 }
-                (TypeKind::String, TypeKind::Integer) => {
+                (TypeIdKind::String, TypeIdKind::Int) => {
                     Value::Integer(value.as_string().parse().unwrap())
                 }
-                (TypeKind::String, TypeKind::Float) => {
+                (TypeIdKind::String, TypeIdKind::Float) => {
                     Value::Float(value.as_string().parse().unwrap())
                 }
-                (TypeKind::String, TypeKind::String) => value,
+                (TypeIdKind::String, TypeIdKind::String) => value,
                 _ => unreachable!(),
             }
         }
@@ -530,11 +397,11 @@ fn eval_expression(
             execute_function(program, &program.functions[&function], args)
         }
         ExpressionKind::Literal { literal } => {
-            match &program.type_table.types[&expression.type_id] {
-                TypeKind::Boolean => Value::Boolean(literal.content == Symbol::from_str("true")),
-                TypeKind::Integer => Value::Integer(literal.content.to_str().parse().unwrap()),
-                TypeKind::Float => Value::Float(literal.content.to_str().parse().unwrap()),
-                TypeKind::String => Value::String(literal.content.to_str().to_owned()),
+            match &program.type_id_table.types[&expression.type_id] {
+                TypeIdKind::Bool => Value::Boolean(literal.content == Symbol::from_str("true")),
+                TypeIdKind::Int => Value::Integer(literal.content.to_str().parse().unwrap()),
+                TypeIdKind::Float => Value::Float(literal.content.to_str().parse().unwrap()),
+                TypeIdKind::String => Value::String(literal.content.to_str().to_owned()),
                 _ => unreachable!(),
             }
         }
@@ -548,6 +415,6 @@ fn eval_expression(
                 .collect();
             Value::Struct(*struct_type, fields)
         }
-        ExpressionKind::Function { function } => Value::Callable(function.clone()),
+        ExpressionKind::Function { id } => Value::Callable(*id),
     }
 }

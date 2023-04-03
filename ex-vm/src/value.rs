@@ -1,5 +1,4 @@
-use ex_codegen::{Program, TypeId, TypeKind};
-use ex_symbol::Symbol;
+use ex_codegen::{FunctionId, Program, TypeId, TypeIdKind};
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
@@ -9,7 +8,7 @@ pub enum Value {
     Integer(i64),
     Float(f64),
     String(String),
-    Callable(Symbol),
+    Callable(FunctionId),
     Struct(TypeId, Vec<Value>),
     Pointer(usize),
     Reference(usize),
@@ -17,23 +16,23 @@ pub enum Value {
 
 impl Value {
     pub fn empty_from_type_id(program: &Program, type_id: TypeId) -> Self {
-        match &program.type_table.types[&type_id] {
-            TypeKind::Empty => Value::Empty,
-            TypeKind::Boolean => Value::Empty,
-            TypeKind::Integer => Value::Empty,
-            TypeKind::Float => Value::Empty,
-            TypeKind::String => Value::Empty,
-            TypeKind::Callable { .. } => Value::Empty,
-            TypeKind::UserTypeStruct { symbol } => {
-                let fields = program.user_type_struct_table[symbol].fields.clone();
+        match &program.type_id_table.types[&type_id] {
+            TypeIdKind::Empty => Value::Empty,
+            TypeIdKind::Bool => Value::Empty,
+            TypeIdKind::Int => Value::Empty,
+            TypeIdKind::Float => Value::Empty,
+            TypeIdKind::String => Value::Empty,
+            TypeIdKind::Callable { .. } => Value::Empty,
+            TypeIdKind::UserStruct { id } => {
+                let fields = program.user_structs[id].fields.clone();
                 let values = fields
                     .iter()
                     .map(|field| Value::empty_from_type_id(program, field.type_id))
                     .collect();
                 Value::Struct(type_id, values)
             }
-            TypeKind::Pointer { .. } => Value::Empty,
-            TypeKind::Reference { .. } => Value::Empty,
+            TypeIdKind::Pointer { .. } => Value::Empty,
+            TypeIdKind::Reference { .. } => Value::Empty,
         }
     }
 
@@ -65,9 +64,9 @@ impl Value {
         }
     }
 
-    pub fn as_callable(&self) -> Symbol {
+    pub fn as_callable(&self) -> FunctionId {
         match self {
-            Value::Callable(value) => *value,
+            Value::Callable(id) => *id,
             _ => unreachable!(),
         }
     }
@@ -95,7 +94,7 @@ impl Display for Value {
             Value::Integer(value) => write!(f, "{}", value),
             Value::Float(value) => write!(f, "{}", value),
             Value::String(value) => write!(f, "{}", value),
-            Value::Callable(value) => write!(f, "{}", value),
+            Value::Callable(id) => write!(f, "function[id={}]", id.get()),
             Value::Struct(_, values) => {
                 write!(f, "(")?;
                 for (i, value) in values.iter().enumerate() {
