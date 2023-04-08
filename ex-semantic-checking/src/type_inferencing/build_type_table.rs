@@ -94,7 +94,7 @@ pub fn build_type_table(
         }
     }
 
-    // 2. Propagate subtypes.
+    // 3. Propagate subtypes.
 
     loop {
         let mut changed = false;
@@ -145,12 +145,12 @@ pub fn build_type_table(
         }
     }
 
-    // 3. Copy subtypes into constraint table.
+    // 4. Copy subtypes into constraint table.
 
     constraints.retain(|constraint| !constraint.is_subtype());
     constraints.extend(subtypes);
 
-    // 4. Solve graph.
+    // 5. Solve graph.
 
     let mut type_table = TypeTable::new();
 
