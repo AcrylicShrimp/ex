@@ -207,8 +207,6 @@ pub fn check_types_stmt_block(
                 check_types_expression(type_table, top_level_table, &hir.left, diagnostics);
                 check_types_expression(type_table, top_level_table, &hir.right, diagnostics);
 
-                // TODO: We should check if left is a l-value, or has reference type.
-
                 if let (Some(left), Some(right)) = (
                     type_table.types.get(&hir.left.id),
                     type_table.types.get(&hir.right.id),
