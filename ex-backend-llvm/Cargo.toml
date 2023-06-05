@@ -1,0 +1,13 @@
+[package]
+name = "ex-backend-llvm"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ex-codegen = { path = "../ex-codegen" }
+ex-parser = { path = "../ex-parser" }
+ex-span = { path = "../ex-span" }
+ex-symbol = { path = "../ex-symbol" }
+inkwell = { version = "0.2", features = ["llvm16-0"] }

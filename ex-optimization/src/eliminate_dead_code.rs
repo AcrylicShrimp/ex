@@ -1,4 +1,4 @@
-use ex_codegen::{BlockId, Function, InstructionKind};
+use ex_codegen::{BlockId, Function, Terminator};
 use std::collections::HashSet;
 
 pub fn eliminate_dead_code(function: &mut Function) {
@@ -27,25 +27,25 @@ fn compute_unreachable_blocks(function: &Function) -> Vec<BlockId> {
         visited.insert(block_id);
 
         let block = &function.block_table.blocks[&block_id];
-        let last_instruction = if let Some(last_instruction) = block.instructions.last() {
-            *last_instruction
+        let terminator = if let Some(terminator) = &block.terminator {
+            terminator
         } else {
             continue;
         };
 
-        match block.instruction_table.instructions[&last_instruction].kind {
-            InstructionKind::Jump { block, .. } => {
-                worklist.push(block);
+        match terminator {
+            Terminator::Jump { block, .. } => {
+                worklist.push(*block);
             }
-            InstructionKind::Branch {
+            Terminator::Branch {
                 then_block,
                 else_block,
                 ..
             } => {
-                worklist.push(then_block);
-                worklist.push(else_block);
+                worklist.push(*then_block);
+                worklist.push(*else_block);
             }
-            _ => {}
+            Terminator::Terminate { .. } => {}
         }
     }
 

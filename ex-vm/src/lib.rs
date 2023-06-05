@@ -3,8 +3,8 @@ mod value;
 pub use value::*;
 
 use ex_codegen::{
-    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Program, TemporaryId,
-    TypeIdKind, UnaryOperator, VariableId,
+    BinaryOperator, Expression, ExpressionKind, Function, InstructionKind, Pointer, Program,
+    TemporaryId, TypeIdKind, UnaryOperator, VariableId,
 };
 use ex_symbol::Symbol;
 use std::collections::HashMap;
@@ -63,24 +63,31 @@ fn execute_function(program: &Program, function: &Function, args: Vec<Value>) ->
         for instruction in &basic_block.instructions {
             let instruction = &basic_block.instruction_table.instructions[instruction];
             match &instruction.kind {
-                InstructionKind::Load { pointer, temporary } => {
-                    if pointer.indices.is_empty() {
-                        temp_stack.insert(*temporary, stack[&pointer.variable].clone());
-                    } else {
-                        let mut variable =
-                            stack.get_mut(&pointer.variable).unwrap().as_struct_mut().1;
+                // InstructionKind::Load { pointer, temporary } => {
+                //     if pointer.indices.is_empty() {
+                //         temp_stack.insert(*temporary, stack[&pointer.variable].clone());
+                //     } else {
+                //         let mut variable =
+                //             stack.get_mut(&pointer.variable).unwrap().as_struct_mut().1;
 
-                        for index in &pointer.indices[..pointer.indices.len() - 1] {
-                            variable = variable[*index].as_struct_mut().1;
-                        }
+                //         for index in &pointer.indices[..pointer.indices.len() - 1] {
+                //             variable = variable[*index].as_struct_mut().1;
+                //         }
 
-                        temp_stack.insert(
-                            *temporary,
-                            variable[pointer.indices[pointer.indices.len() - 1]].clone(),
-                        );
-                    }
-                }
+                //         temp_stack.insert(
+                //             *temporary,
+                //             variable[pointer.indices[pointer.indices.len() - 1]].clone(),
+                //         );
+                //     }
+                // }
                 InstructionKind::Store { pointer, temporary } => {
+                    match pointer {
+                        Pointer::Function(..) => {
+                            panic!("cannot store to function pointer")
+                        }
+                        Pointer::Variable(variable) => {}
+                        Pointer::RawPointer(_) => {}
+                    }
                     let variable = if pointer.indices.is_empty() {
                         stack.get_mut(&pointer.variable).unwrap()
                     } else {
@@ -96,30 +103,30 @@ fn execute_function(program: &Program, function: &Function, args: Vec<Value>) ->
                     let temporary = &temp_stack[temporary];
                     *variable = temporary.clone();
                 }
-                InstructionKind::Assign {
-                    temporary,
-                    expression,
-                } => {
-                    let value = eval_expression(program, &temp_stack, expression);
-                    temp_stack.insert(*temporary, value);
-                }
-                InstructionKind::Extract {
-                    from,
-                    indices,
-                    temporary,
-                } => {
-                    if indices.is_empty() {
-                        temp_stack.insert(*temporary, temp_stack[from].clone());
-                    } else {
-                        let mut value = temp_stack[from].clone();
+                // InstructionKind::Assign {
+                //     temporary,
+                //     expression,
+                // } => {
+                //     let value = eval_expression(program, &temp_stack, expression);
+                //     temp_stack.insert(*temporary, value);
+                // }
+                // InstructionKind::Extract {
+                //     from,
+                //     indices,
+                //     temporary,
+                // } => {
+                //     if indices.is_empty() {
+                //         temp_stack.insert(*temporary, temp_stack[from].clone());
+                //     } else {
+                //         let mut value = temp_stack[from].clone();
 
-                        for index in indices {
-                            value = value.as_struct().1[*index].clone();
-                        }
+                //         for index in indices {
+                //             value = value.as_struct().1[*index].clone();
+                //         }
 
-                        temp_stack.insert(*temporary, value);
-                    }
-                }
+                //         temp_stack.insert(*temporary, value);
+                //     }
+                // }
                 InstructionKind::Jump { block, args } => {
                     let next_block = &function.block_table.blocks[block];
                     let next_temp_stack = args

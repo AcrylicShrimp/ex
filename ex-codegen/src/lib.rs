@@ -8,11 +8,13 @@ mod instruction;
 mod instruction_id;
 mod instruction_id_allocator;
 mod instruction_table;
+mod pointer;
 mod program;
 mod temporary;
 mod temporary_id;
 mod temporary_id_allocator;
 mod temporary_table;
+mod terminator;
 mod type_id;
 mod type_id_allocator;
 mod type_id_kind;
@@ -33,11 +35,13 @@ pub use instruction::*;
 pub use instruction_id::*;
 pub use instruction_id_allocator::*;
 pub use instruction_table::*;
+pub use pointer::*;
 pub use program::*;
 pub use temporary::*;
 pub use temporary_id::*;
 pub use temporary_id_allocator::*;
 pub use temporary_table::*;
+pub use terminator::*;
 pub use type_id::*;
 pub use type_id_allocator::*;
 pub use type_id_kind::*;
@@ -135,8 +139,8 @@ fn codegen_function(
         .blocks
         .get_mut(&function.entry_block_id)
         .unwrap()
-        .new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
-    inner_exit_block.new_instruction(InstructionKind::terminate(None));
+        .set_terminator(Terminator::jump(inner_entry_block_id, vec![]));
+    inner_exit_block.set_terminator(Terminator::terminate(None));
     function.block_table.insert(inner_exit_block);
 
     function
@@ -177,7 +181,7 @@ fn codegen_function_stmt_block(
                     type_table,
                     hir,
                 );
-                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+                block.set_terminator(Terminator::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
@@ -198,7 +202,7 @@ fn codegen_function_stmt_block(
                         &let_assignment.expression,
                     );
                     block.new_instruction(InstructionKind::store(
-                        Pointer::new(variable, vec![]),
+                        Pointer::variable(variable),
                         temporary,
                     ));
                 }
@@ -214,7 +218,7 @@ fn codegen_function_stmt_block(
                     type_table,
                     hir,
                 );
-                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+                block.set_terminator(Terminator::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
@@ -229,21 +233,21 @@ fn codegen_function_stmt_block(
                     type_table,
                     hir,
                 );
-                block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+                block.set_terminator(Terminator::jump(inner_entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = inner_exit_block;
             }
             HIRStatementKind::Break(_) => {
                 let loop_context = loop_context.unwrap();
-                block.new_instruction(InstructionKind::jump(loop_context.exit_block_id, vec![]));
+                block.set_terminator(Terminator::jump(loop_context.exit_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = function.new_block(iter_empty());
             }
             HIRStatementKind::Continue(_) => {
                 let loop_context = loop_context.unwrap();
-                block.new_instruction(InstructionKind::jump(loop_context.entry_block_id, vec![]));
+                block.set_terminator(Terminator::jump(loop_context.entry_block_id, vec![]));
                 function.block_table.insert(block);
 
                 block = function.new_block(iter_empty());
@@ -260,10 +264,10 @@ fn codegen_function_stmt_block(
                             type_table,
                             expression,
                         );
-                        block.new_instruction(InstructionKind::terminate(Some(temporary)));
+                        block.set_terminator(Terminator::terminate(Some(temporary)));
                     }
                     None => {
-                        block.new_instruction(InstructionKind::terminate(None));
+                        block.set_terminator(Terminator::terminate(None));
                     }
                 }
                 function.block_table.insert(block);
@@ -272,6 +276,8 @@ fn codegen_function_stmt_block(
             }
             HIRStatementKind::Assignment(hir) => {
                 let pointer = lhs_expression_to_pointer(
+                    type_id_table,
+                    &mut block,
                     reverse_variable_table,
                     function,
                     top_level_table,
@@ -290,7 +296,7 @@ fn codegen_function_stmt_block(
                 block.new_instruction(InstructionKind::store(pointer, temporary));
             }
             HIRStatementKind::Row(hir) => {
-                codegen_function_expression(
+                let temporary = codegen_function_expression(
                     type_id_table,
                     &mut block,
                     reverse_variable_table,
@@ -299,6 +305,7 @@ fn codegen_function_stmt_block(
                     type_table,
                     &hir.expression,
                 );
+                block.new_instruction(InstructionKind::expression(temporary));
             }
         }
     }
@@ -339,22 +346,16 @@ fn codegen_function_stmt_if(
         &hir.body_block,
     );
     let end_block = function.new_block(iter_empty());
-    let branch_instruction = block.new_instruction(InstructionKind::branch(
+    block.set_terminator(Terminator::branch(
         condition,
         then_entry_block_id,
         vec![],
         end_block.id,
         vec![],
     ));
-    then_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
+    then_exit_block.set_terminator(Terminator::jump(end_block.id, vec![]));
     function.block_table.insert(then_exit_block);
-    stack.push((
-        block,
-        condition,
-        branch_instruction,
-        then_entry_block_id,
-        end_block,
-    ));
+    stack.push((block, condition, then_entry_block_id, end_block));
 
     for hir in &hir.single_else_ifs {
         let mut block = function.new_block(iter_empty());
@@ -378,22 +379,16 @@ fn codegen_function_stmt_if(
             &hir.body_block,
         );
         let end_block = function.new_block(iter_empty());
-        let branch_instruction = block.new_instruction(InstructionKind::branch(
+        block.set_terminator(Terminator::branch(
             condition,
             then_entry_block_id,
             vec![],
             end_block.id,
             vec![],
         ));
-        then_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
+        then_exit_block.set_terminator(Terminator::jump(end_block.id, vec![]));
         function.block_table.insert(then_exit_block);
-        stack.push((
-            block,
-            condition,
-            branch_instruction,
-            then_entry_block_id,
-            end_block,
-        ));
+        stack.push((block, condition, then_entry_block_id, end_block));
     }
 
     if let Some(hir) = &hir.single_else {
@@ -407,38 +402,29 @@ fn codegen_function_stmt_if(
             type_table,
             &hir.body_block,
         );
-        let (block, condition, branch_instruction, then_entry_block_id, end_block) =
-            stack.last_mut().unwrap();
-        block.replace_instruction(
-            *branch_instruction,
-            InstructionKind::branch(
-                *condition,
-                *then_entry_block_id,
-                vec![],
-                else_entry_id,
-                vec![],
-            ),
-        );
-        else_exit_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
+        let (block, condition, then_entry_block_id, end_block) = stack.last_mut().unwrap();
+        block.set_terminator(Terminator::branch(
+            *condition,
+            *then_entry_block_id,
+            vec![],
+            else_entry_id,
+            vec![],
+        ));
+        else_exit_block.set_terminator(Terminator::jump(end_block.id, vec![]));
         function.block_table.insert(else_exit_block);
     }
 
-    let (mut last_block, _, _, _, mut last_end_block) = stack.pop().unwrap();
+    let (mut last_block, _, _, mut last_end_block) = stack.pop().unwrap();
 
-    while let Some((mut block, condition, branch_instruction, then_entry_block_id, end_block)) =
-        stack.pop()
-    {
-        block.replace_instruction(
-            branch_instruction,
-            InstructionKind::branch(
-                condition,
-                then_entry_block_id,
-                vec![],
-                last_end_block.id,
-                vec![],
-            ),
-        );
-        last_end_block.new_instruction(InstructionKind::jump(end_block.id, vec![]));
+    while let Some((mut block, condition, then_entry_block_id, end_block)) = stack.pop() {
+        block.set_terminator(Terminator::branch(
+            condition,
+            then_entry_block_id,
+            vec![],
+            last_end_block.id,
+            vec![],
+        ));
+        last_end_block.set_terminator(Terminator::jump(end_block.id, vec![]));
 
         function.block_table.insert(last_block);
         function.block_table.insert(last_end_block);
@@ -480,10 +466,10 @@ fn codegen_function_stmt_loop(
         type_table,
         &hir.body_block,
     );
-    entry_block.new_instruction(InstructionKind::jump(inner_entry_block_id, vec![]));
+    entry_block.set_terminator(Terminator::jump(inner_entry_block_id, vec![]));
     function.block_table.insert(entry_block);
 
-    inner_exit_block.new_instruction(InstructionKind::jump(entry_block_id, vec![]));
+    inner_exit_block.set_terminator(Terminator::jump(entry_block_id, vec![]));
     function.block_table.insert(inner_exit_block);
 
     (entry_block_id, exit_block)
@@ -499,7 +485,6 @@ fn codegen_function_expression(
     hir: &HIRExpression,
 ) -> TemporaryId {
     let type_id = type_kind_to_type_id(type_id_table, &type_table.types[&hir.id]);
-    let temporary = block.new_temporary(type_id);
 
     match &hir.kind {
         HIRExpressionKind::Binary(hir) => {
@@ -521,31 +506,71 @@ fn codegen_function_expression(
                 type_table,
                 &hir.right,
             );
-            block.new_instruction(InstructionKind::assign(
-                temporary,
+            block.new_temporary(
+                type_id,
                 Expression::new(
                     ExpressionKind::binary(convert_binary_op(hir.operator_kind), left, right),
                     type_id,
                 ),
-            ));
+            )
         }
         HIRExpressionKind::Unary(hir) => {
-            let right = codegen_function_expression(
-                type_id_table,
-                block,
-                reverse_variable_table,
-                function,
-                top_level_table,
-                type_table,
-                &hir.right,
-            );
-            block.new_instruction(InstructionKind::assign(
-                temporary,
-                Expression::new(
-                    ExpressionKind::unary(convert_unary_op(hir.operator_kind), right),
-                    type_id,
-                ),
-            ));
+            match hir.operator_kind {
+                HIRUnaryOperatorKind::AddressOf => {
+                    // TODO: Look into hir.right and see if the given expression is variable or not.
+                    // If variable, we can apply ExpressionKind::element_pointer directly.
+                    // Otherwise, this means that we're trying to obtain a pointer of something that has no address.
+                    // This makes no sense, so we should error out.
+                    // TODO: Let `check_lvalues` or similar pass handle this.
+                    // TODO: If the given expression is not a variable and is a reference, we should be able to obtain a pointer of it.
+                    let right = lhs_expression_to_pointer(
+                        type_id_table,
+                        block,
+                        reverse_variable_table,
+                        function,
+                        top_level_table,
+                        type_table,
+                        &hir.right,
+                    );
+                    block.new_temporary(
+                        type_id,
+                        Expression::new(ExpressionKind::pointer(right), type_id),
+                    )
+                }
+                HIRUnaryOperatorKind::Dereference => {
+                    let right = codegen_function_expression(
+                        type_id_table,
+                        block,
+                        reverse_variable_table,
+                        function,
+                        top_level_table,
+                        type_table,
+                        &hir.right,
+                    );
+                    block.new_temporary(
+                        type_id,
+                        Expression::new(ExpressionKind::load(Pointer::RawPointer(right)), type_id),
+                    )
+                }
+                _ => {
+                    let right = codegen_function_expression(
+                        type_id_table,
+                        block,
+                        reverse_variable_table,
+                        function,
+                        top_level_table,
+                        type_table,
+                        &hir.right,
+                    );
+                    block.new_temporary(
+                        type_id,
+                        Expression::new(
+                            ExpressionKind::unary(convert_unary_op(hir.operator_kind), right),
+                            type_id,
+                        ),
+                    )
+                }
+            }
         }
         HIRExpressionKind::As(hir) => {
             let expression = codegen_function_expression(
@@ -559,13 +584,13 @@ fn codegen_function_expression(
             );
             let from_type_id =
                 type_kind_to_type_id(type_id_table, &type_table.types[&hir.expression.id]);
-            block.new_instruction(InstructionKind::assign(
-                temporary,
+            block.new_temporary(
+                type_id,
                 Expression::new(
                     ExpressionKind::convert(expression, from_type_id, type_id),
                     type_id,
                 ),
-            ));
+            )
         }
         HIRExpressionKind::Call(hir) => {
             let expression = codegen_function_expression(
@@ -592,49 +617,70 @@ fn codegen_function_expression(
                     )
                 })
                 .collect();
-            block.new_instruction(InstructionKind::assign(
-                temporary,
+            block.new_temporary(
+                type_id,
                 Expression::new(ExpressionKind::call(expression, args), type_id),
-            ));
+            )
         }
-        HIRExpressionKind::Member(hir) => {
-            let expression = codegen_function_expression(
+        HIRExpressionKind::Member(..) => {
+            let pointer = lhs_expression_to_pointer(
                 type_id_table,
                 block,
                 reverse_variable_table,
                 function,
                 top_level_table,
                 type_table,
-                &hir.expression,
+                hir,
             );
-            let user_struct = match type_table.types[&hir.expression.id].unwrap_reference() {
-                TypeKind::UserStruct { id } => {
-                    top_level_table.user_types[id].as_user_struct().unwrap()
-                }
-                _ => unreachable!(),
-            };
-            let index = user_struct.field_names[&hir.member.symbol];
-            block.new_instruction(InstructionKind::extract(expression, vec![index], temporary));
+            block.new_temporary(
+                type_id,
+                Expression::new(ExpressionKind::load(pointer), type_id),
+            )
         }
-        HIRExpressionKind::FunctionRef(hir) => {
-            block.new_instruction(InstructionKind::assign(
-                temporary,
-                Expression::new(ExpressionKind::function(hir.function), type_id),
-            ));
+        HIRExpressionKind::FunctionRef(..) => {
+            let pointer = lhs_expression_to_pointer(
+                type_id_table,
+                block,
+                reverse_variable_table,
+                function,
+                top_level_table,
+                type_table,
+                hir,
+            );
+            block.new_temporary(
+                type_id,
+                Expression::new(ExpressionKind::pointer(pointer), type_id),
+            )
         }
-        HIRExpressionKind::ParamRef(hir) => {
-            let variable = function.params[hir.index].variable_id;
-            block.new_instruction(InstructionKind::load(
-                Pointer::new(variable, vec![]),
-                temporary,
-            ));
+        HIRExpressionKind::ParamRef(..) => {
+            let pointer = lhs_expression_to_pointer(
+                type_id_table,
+                block,
+                reverse_variable_table,
+                function,
+                top_level_table,
+                type_table,
+                hir,
+            );
+            block.new_temporary(
+                type_id,
+                Expression::new(ExpressionKind::load(pointer), type_id),
+            )
         }
-        HIRExpressionKind::VariableRef(hir) => {
-            let variable = reverse_variable_table[&hir.statement];
-            block.new_instruction(InstructionKind::load(
-                Pointer::new(variable, vec![]),
-                temporary,
-            ));
+        HIRExpressionKind::VariableRef(..) => {
+            let pointer = lhs_expression_to_pointer(
+                type_id_table,
+                block,
+                reverse_variable_table,
+                function,
+                top_level_table,
+                type_table,
+                hir,
+            );
+            block.new_temporary(
+                type_id,
+                Expression::new(ExpressionKind::load(pointer), type_id),
+            )
         }
         HIRExpressionKind::UnknownRef(..) => {
             unreachable!()
@@ -665,8 +711,8 @@ fn codegen_function_expression(
                 })
                 .collect::<Vec<_>>();
             fields_with_indices.sort_unstable_by_key(|field| field.0);
-            block.new_instruction(InstructionKind::assign(
-                temporary,
+            block.new_temporary(
+                type_id,
                 Expression::new(
                     ExpressionKind::struct_literal(
                         type_id,
@@ -677,20 +723,18 @@ fn codegen_function_expression(
                     ),
                     type_id,
                 ),
-            ));
+            )
         }
-        HIRExpressionKind::Literal(literal) => {
-            block.new_instruction(InstructionKind::assign(
-                temporary,
-                Expression::new(ExpressionKind::literal(literal.clone()), type_id),
-            ));
-        }
+        HIRExpressionKind::Literal(literal) => block.new_temporary(
+            type_id,
+            Expression::new(ExpressionKind::literal(literal.clone()), type_id),
+        ),
     }
-
-    temporary
 }
 
 fn lhs_expression_to_pointer(
+    type_id_table: &mut TypeIdTable,
+    block: &mut BasicBlock,
     reverse_variable_table: &ReverseVariableTable,
     function: &Function,
     top_level_table: &TopLevelTable,
@@ -699,11 +743,33 @@ fn lhs_expression_to_pointer(
 ) -> Pointer {
     match &hir.kind {
         HIRExpressionKind::Binary(..) => unreachable!(),
-        HIRExpressionKind::Unary(..) => unreachable!(),
+        HIRExpressionKind::Unary(hir) => match hir.operator_kind {
+            HIRUnaryOperatorKind::AddressOf => {
+                // We cannot take the address of a temporary.
+                unreachable!()
+            }
+            HIRUnaryOperatorKind::Dereference => {
+                // We don't take dereferences of pointers here.
+                // Instead, forward the given pointer directly.
+                let temporary = codegen_function_expression(
+                    type_id_table,
+                    block,
+                    reverse_variable_table,
+                    function,
+                    top_level_table,
+                    type_table,
+                    &hir.right,
+                );
+                Pointer::raw_pointer(temporary)
+            }
+            _ => unreachable!(),
+        },
         HIRExpressionKind::As(..) => unreachable!(),
         HIRExpressionKind::Call(..) => unreachable!(),
         HIRExpressionKind::Member(hir) => {
-            let mut pointer = lhs_expression_to_pointer(
+            let pointer = lhs_expression_to_pointer(
+                type_id_table,
+                block,
                 reverse_variable_table,
                 function,
                 top_level_table,
@@ -717,17 +783,27 @@ fn lhs_expression_to_pointer(
                 _ => unreachable!(),
             };
             let index = user_struct.field_names[&hir.member.symbol];
-            pointer.indices.push(index);
-            pointer
+            let type_id = type_kind_to_type_id(type_id_table, &user_struct.fields[index]);
+            let temporary = block.new_temporary(
+                type_id,
+                Expression::new(
+                    ExpressionKind::ElementPointer {
+                        base: pointer,
+                        indices: vec![index],
+                    },
+                    type_id,
+                ),
+            );
+            Pointer::raw_pointer(temporary)
         }
-        HIRExpressionKind::FunctionRef(..) => unreachable!(),
+        HIRExpressionKind::FunctionRef(hir) => Pointer::Function(FunctionId::new(hir.function)),
         HIRExpressionKind::ParamRef(hir) => {
             let variable = function.params[hir.index].variable_id;
-            Pointer::new(variable, vec![])
+            Pointer::variable(variable)
         }
         HIRExpressionKind::VariableRef(hir) => {
             let variable = reverse_variable_table[&hir.statement];
-            Pointer::new(variable, vec![])
+            Pointer::variable(variable)
         }
         HIRExpressionKind::UnknownRef(..) => unreachable!(),
         HIRExpressionKind::StructLiteral(..) => unreachable!(),
@@ -764,8 +840,8 @@ fn convert_unary_op(op: HIRUnaryOperatorKind) -> UnaryOperator {
         HIRUnaryOperatorKind::Minus => UnaryOperator::Minus,
         HIRUnaryOperatorKind::BitNot => UnaryOperator::BitNot,
         HIRUnaryOperatorKind::LogNot => UnaryOperator::LogNot,
-        HIRUnaryOperatorKind::AddressOf => UnaryOperator::AddressOf,
-        HIRUnaryOperatorKind::Dereference => UnaryOperator::Dereference,
+        HIRUnaryOperatorKind::AddressOf => unreachable!(),
+        HIRUnaryOperatorKind::Dereference => unreachable!(),
     }
 }
 
@@ -781,7 +857,7 @@ fn type_kind_to_type_id(type_id_table: &mut TypeIdTable, type_kind: &TypeKind) -
             params,
             return_type,
         } => TypeIdKind::Callable {
-            params: params
+            param_types: params
                 .iter()
                 .map(|type_kind| type_kind_to_type_id(type_id_table, type_kind))
                 .collect(),

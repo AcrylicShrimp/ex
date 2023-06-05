@@ -1,5 +1,5 @@
-use crate::{FunctionId, TemporaryId, TypeId};
-use ex_parser::{NodeId, TokenLiteral};
+use crate::{Pointer, TemporaryId, TypeId};
+use ex_parser::TokenLiteral;
 
 #[derive(Debug, Clone, Hash)]
 pub struct Expression {
@@ -33,15 +33,22 @@ pub enum ExpressionKind {
         expression: TemporaryId,
         args: Vec<TemporaryId>,
     },
-    Function {
-        id: FunctionId,
-    },
     StructLiteral {
         struct_type: TypeId,
         fields: Vec<TemporaryId>,
     },
     Literal {
         literal: TokenLiteral,
+    },
+    ElementPointer {
+        base: Pointer,
+        indices: Vec<usize>,
+    },
+    Pointer {
+        pointer: Pointer,
+    },
+    Load {
+        pointer: Pointer,
     },
 }
 
@@ -70,12 +77,6 @@ impl ExpressionKind {
         Self::Call { expression, args }
     }
 
-    pub fn function(id: NodeId) -> Self {
-        Self::Function {
-            id: FunctionId::new(id),
-        }
-    }
-
     pub fn struct_literal(struct_type: TypeId, fields: Vec<TemporaryId>) -> Self {
         Self::StructLiteral {
             struct_type,
@@ -85,6 +86,18 @@ impl ExpressionKind {
 
     pub fn literal(literal: TokenLiteral) -> Self {
         Self::Literal { literal }
+    }
+
+    pub fn element_pointer(base: Pointer, indices: Vec<usize>) -> Self {
+        Self::ElementPointer { base, indices }
+    }
+
+    pub fn pointer(pointer: Pointer) -> Self {
+        Self::Pointer { pointer }
+    }
+
+    pub fn load(pointer: Pointer) -> Self {
+        Self::Load { pointer }
     }
 }
 
@@ -116,6 +129,4 @@ pub enum UnaryOperator {
     Minus,
     BitNot,
     LogNot,
-    AddressOf,
-    Dereference,
 }

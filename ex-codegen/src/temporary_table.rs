@@ -1,4 +1,4 @@
-use crate::{Temporary, TemporaryId, TemporaryIdAllocator, TypeId};
+use crate::{Expression, Temporary, TemporaryId, TemporaryIdAllocator, TypeId};
 use std::collections::HashMap;
 
 #[derive(Default, Debug, Clone)]
@@ -12,9 +12,10 @@ impl TemporaryTable {
         Default::default()
     }
 
-    pub fn insert(&mut self, type_id: TypeId) -> TemporaryId {
+    pub fn insert(&mut self, type_id: TypeId, expression: Option<Expression>) -> TemporaryId {
         let id = self.temporary_id_allocator.allocate();
-        self.temporaries.insert(id, Temporary::new(id, type_id));
+        self.temporaries
+            .insert(id, Temporary::new(id, type_id, expression));
         id
     }
 }

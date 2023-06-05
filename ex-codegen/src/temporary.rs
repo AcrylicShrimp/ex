@@ -1,14 +1,19 @@
-use crate::{TemporaryId, TypeId};
+use crate::{Expression, TemporaryId, TypeId};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Temporary {
     pub id: TemporaryId,
     pub type_id: TypeId,
+    pub expression: Option<Expression>,
 }
 
 impl Temporary {
-    pub fn new(id: TemporaryId, type_id: TypeId) -> Self {
-        Self { id, type_id }
+    pub fn new(id: TemporaryId, type_id: TypeId, expression: Option<Expression>) -> Self {
+        Self {
+            id,
+            type_id,
+            expression,
+        }
     }
 }
 

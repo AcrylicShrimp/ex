@@ -1,4 +1,4 @@
-use ex_codegen::{FunctionId, Program, TypeId, TypeIdKind};
+use ex_codegen::{FunctionId, Program, TypeId, TypeIdKind, VariableId};
 use std::fmt::Display;
 
 #[derive(Debug, Clone)]
@@ -10,8 +10,8 @@ pub enum Value {
     String(String),
     Callable(FunctionId),
     Struct(TypeId, Vec<Value>),
-    Pointer(usize),
-    Reference(usize),
+    Pointer(VariableId, Vec<usize>),
+    Reference(VariableId, Vec<usize>),
 }
 
 impl Value {
@@ -105,8 +105,12 @@ impl Display for Value {
                 }
                 write!(f, ")")
             }
-            Value::Pointer(ptr) => write!(f, "ptr {}", ptr),
-            Value::Reference(ptr) => write!(f, "ref {}", ptr),
+            Value::Pointer(var, indices) => {
+                write!(f, "ptr[var={}, indices={:?}]", var.get(), indices)
+            }
+            Value::Reference(var, indices) => {
+                write!(f, "ref[var={}, indices={:?}]", var.get(), indices)
+            }
         }
     }
 }
