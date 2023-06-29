@@ -1,8 +1,10 @@
 mod binary_op;
+mod conversion_op;
 mod dispatcher;
 mod unary_op;
 
 use binary_op::register_binary_op_dispatchers;
+use conversion_op::register_conversion_op_dispatchers;
 use dispatcher::{AccepterContext, Dispatcher};
 use ex_codegen::{
     ExpressionKind, Function, FunctionId, InstructionId, InstructionKind, Pointer, Program,
@@ -94,6 +96,7 @@ fn ir_to_llvm<'a, 'ctx: 'a>(context: &'ctx Context, program: &'a Program) -> Mod
     let mut dispatcher = Dispatcher::new();
     register_binary_op_dispatchers(&mut dispatcher);
     register_unary_op_dispatchers(&mut dispatcher);
+    register_conversion_op_dispatchers(&mut dispatcher);
 
     for (id, function) in &program.functions {
         let llvm_function = llvm_function_map.get(id).unwrap();
