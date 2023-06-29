@@ -467,29 +467,22 @@ fn ir_to_llvm_expression<'a, 'ctx: 'a>(
             }
         },
         ExpressionKind::ElementPointer { base, indices } => {
-            let base = ir_to_llvm_expression(ctx, dispatcher, *base);
-            let mut indices = indices
-                .iter()
-                .map(|index| ir_to_llvm_expression(ctx, dispatcher, *index))
-                .collect::<Vec<_>>();
-            let mut pointer = match base {
-                BasicValueEnum::PointerValue(llvm_value) => llvm_value,
-                BasicValueEnum::IntValue(llvm_value) => ctx.builder.build_int_to_ptr(
-                    llvm_value,
-                    ctx.context.i64_type().ptr_type(AddressSpace::Generic),
-                    "int_to_ptr",
-                ),
-                BasicValueEnum::StructValue(llvm_value) => ctx.builder.build_struct_gep(
-                    llvm_value,
-                    indices.remove(0).into_int_value(),
-                    "struct_gep",
-                ),
-                _ => unreachable!(),
+            let ptr_type_id = ptr_to_type_id(ctx, *base);
+            let base_type_id = if let TypeIdKind::Pointer { type_id } =
+                ctx.program.type_id_table.types.get(&ptr_type_id).unwrap()
+            {
+                *type_id
+            } else {
+                unreachable!()
             };
-            for index in indices {
-                pointer = ctx.builder.build_gep(pointer, &[index], "gep");
-            }
-            BasicValueEnum::PointerValue(pointer)
+            let base_type = type_id_to_llvm_type(&ctx.context, &ctx.program, base_type_id);
+            let base = ptr_to_llvm_ptr(ctx, *base);
+            let indices = indices
+                .iter()
+                .cloned()
+                .map(|index| ctx.context.i64_type().const_int(index as u64, false))
+                .collect::<Vec<_>>();
+            BasicValueEnum::PointerValue(unsafe { base.const_gep(base_type, &indices) })
         }
         ExpressionKind::Pointer { pointer } => {
             BasicValueEnum::PointerValue(ptr_to_llvm_ptr(ctx, *pointer))
@@ -528,6 +521,28 @@ fn ir_to_llvm_expression<'a, 'ctx: 'a>(
         .unwrap()
         .insert(temporary_id, llvm_value.clone());
     llvm_value
+}
+
+fn ptr_to_type_id<'a, 'ctx>(ctx: &mut AccepterContext<'a, 'ctx>, pointer: Pointer) -> TypeId {
+    match pointer {
+        Pointer::Function(_) => unreachable!(),
+        Pointer::Variable(id) => {
+            ctx.function
+                .variable_table
+                .variables
+                .get(&id)
+                .unwrap()
+                .type_id
+        }
+        Pointer::RawPointer(id) => {
+            ctx.block
+                .temporary_table
+                .temporaries
+                .get(&id)
+                .unwrap()
+                .type_id
+        }
+    }
 }
 
 fn ptr_to_llvm_ptr<'a, 'ctx>(
