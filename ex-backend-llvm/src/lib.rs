@@ -18,7 +18,7 @@ use inkwell::{
     values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue},
     AddressSpace, OptimizationLevel,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, iter::once};
 use unary_op::register_unary_op_dispatchers;
 
 pub struct Backend {
@@ -473,13 +473,12 @@ fn ir_to_llvm_expression<'a, 'ctx: 'a>(
             {
                 *type_id
             } else {
-                unreachable!()
+                ptr_type_id
             };
             let base_type = type_id_to_llvm_type(&ctx.context, &ctx.program, base_type_id);
             let base = ptr_to_llvm_ptr(ctx, *base);
-            let indices = indices
-                .iter()
-                .cloned()
+            let indices = once(0)
+                .chain(indices.iter().cloned())
                 .map(|index| ctx.context.i64_type().const_int(index as u64, false))
                 .collect::<Vec<_>>();
             BasicValueEnum::PointerValue(unsafe { base.const_gep(base_type, &indices) })
