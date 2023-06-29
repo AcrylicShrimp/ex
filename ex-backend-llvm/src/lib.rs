@@ -1,8 +1,12 @@
-mod visitor;
+mod binary_op;
+mod dispatcher;
+mod unary_op;
 
+use binary_op::register_binary_op_dispatchers;
+use dispatcher::{AccepterContext, Dispatcher};
 use ex_codegen::{
-    BasicBlock, BinaryOperator, BlockId, ExpressionKind, Function, FunctionId, InstructionId,
-    InstructionKind, Pointer, Program, TemporaryId, Terminator, TypeId, TypeIdKind, VariableId,
+    ExpressionKind, Function, FunctionId, InstructionId, InstructionKind, Pointer, Program,
+    TemporaryId, Terminator, TypeId, TypeIdKind,
 };
 use ex_parser::TokenLiteralKind;
 use inkwell::{
@@ -11,10 +15,11 @@ use inkwell::{
     module::Module,
     passes::PassManager,
     types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType},
-    values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, IntValue, PointerValue},
-    AddressSpace, IntPredicate, OptimizationLevel,
+    values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, PointerValue},
+    AddressSpace, OptimizationLevel,
 };
 use std::collections::HashMap;
+use unary_op::register_unary_op_dispatchers;
 
 pub struct Backend {
     pub context: Context,
@@ -27,11 +32,11 @@ impl Backend {
         }
     }
 
-    pub fn compile(&self, program: &Program) -> Module {
+    pub fn compile<'ctx>(&'ctx self, program: &'ctx Program) -> Module<'ctx> {
         ir_to_llvm(&self.context, program)
     }
 
-    pub fn optimize(&self, module: &Module) {
+    pub fn optimize<'ctx>(&'ctx self, module: &'ctx Module<'ctx>) {
         let fpm = PassManager::create(module);
         fpm.add_instruction_combining_pass();
         fpm.add_reassociate_pass();
@@ -50,7 +55,7 @@ impl Backend {
         fpm.finalize();
     }
 
-    pub fn execute(&self, module: &Module, function_name: impl AsRef<str>) {
+    pub fn execute<'ctx>(&'ctx self, module: &'ctx Module<'ctx>, function_name: impl AsRef<str>) {
         type MainFunc = unsafe extern "C" fn();
 
         let engine = module
@@ -61,7 +66,7 @@ impl Backend {
     }
 }
 
-fn ir_to_llvm<'ctx>(context: &'ctx Context, program: &Program) -> Module<'ctx> {
+fn ir_to_llvm<'a, 'ctx: 'a>(context: &'ctx Context, program: &'a Program) -> Module<'ctx> {
     let module = context.create_module("module_0");
     let builder = context.create_builder();
 
@@ -86,6 +91,10 @@ fn ir_to_llvm<'ctx>(context: &'ctx Context, program: &Program) -> Module<'ctx> {
             )
         }));
 
+    let mut dispatcher = Dispatcher::new();
+    register_binary_op_dispatchers(&mut dispatcher);
+    register_unary_op_dispatchers(&mut dispatcher);
+
     for (id, function) in &program.functions {
         let llvm_function = llvm_function_map.get(id).unwrap();
         ir_to_llvm_function(
@@ -93,9 +102,10 @@ fn ir_to_llvm<'ctx>(context: &'ctx Context, program: &Program) -> Module<'ctx> {
             &module,
             &builder,
             program,
-            &llvm_function_map,
             function,
             llvm_function.clone(),
+            &llvm_function_map,
+            &mut dispatcher,
         );
     }
 
@@ -107,15 +117,16 @@ fn ir_to_llvm_function<'ctx>(
     module: &Module<'ctx>,
     builder: &Builder<'ctx>,
     program: &Program,
-    llvm_function_map: &HashMap<FunctionId, FunctionValue<'ctx>>,
     function: &Function,
     llvm_function: FunctionValue<'ctx>,
+    llvm_function_map: &HashMap<FunctionId, FunctionValue<'ctx>>,
+    dispatcher: &mut Dispatcher,
 ) {
-    let param_types = function
-        .params
-        .iter()
-        .map(|param| param.type_id)
-        .collect::<Vec<_>>();
+    // let param_types = function
+    //     .params
+    //     .iter()
+    //     .map(|param| param.type_id)
+    //     .collect::<Vec<_>>();
 
     let entry = context.append_basic_block(llvm_function, "entry");
     builder.position_at_end(entry);
@@ -175,32 +186,45 @@ fn ir_to_llvm_function<'ctx>(
             .block_table
             .blocks
             .iter()
-            .map(|(id, block)| (*id, HashMap::new())),
+            .map(|(id, _)| (*id, HashMap::new())),
     );
 
     for (id, llvm_block) in &llvm_block_map {
         let block = function.block_table.blocks.get(id).unwrap();
         builder.position_at_end(*llvm_block);
 
+        let mut ctx = AccepterContext {
+            context,
+            module,
+            builder,
+            program,
+            function,
+            block,
+            llvm_function_map,
+            llvm_variable_map: &llvm_variable_map,
+            llvm_temporaries_map: &mut llvm_temporaries_map,
+        };
+
         for id in &block.instructions {
-            ir_to_llvm_instruction(
-                context,
-                module,
-                builder,
-                program,
-                function,
-                block,
-                llvm_function_map,
-                &llvm_variable_map,
-                &mut llvm_temporaries_map,
-                *id,
-            );
+            ir_to_llvm_instruction(&mut ctx, dispatcher, *id);
         }
     }
 
     for (id, llvm_block) in &llvm_block_map {
         let block = function.block_table.blocks.get(id).unwrap();
         builder.position_at_end(*llvm_block);
+
+        let mut ctx = AccepterContext {
+            context,
+            module,
+            builder,
+            program,
+            function,
+            block,
+            llvm_function_map,
+            llvm_variable_map: &llvm_variable_map,
+            llvm_temporaries_map: &mut llvm_temporaries_map,
+        };
 
         // TODO: Add support for phi nodes.
         // It's OK for now because we don't use them in the IR.
@@ -215,18 +239,7 @@ fn ir_to_llvm_function<'ctx>(
                 else_block: dst1,
                 ..
             } => {
-                let llvm_condition = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    &llvm_variable_map,
-                    &mut llvm_temporaries_map,
-                    *condition,
-                );
+                let llvm_condition = ir_to_llvm_expression(&mut ctx, dispatcher, *condition);
                 builder.build_conditional_branch(
                     llvm_condition.into_int_value(),
                     llvm_block_map.get(dst0).unwrap().clone(),
@@ -235,18 +248,7 @@ fn ir_to_llvm_function<'ctx>(
             }
             Terminator::Terminate { temporary } => match temporary {
                 Some(temporary) => {
-                    let llvm_temporary = ir_to_llvm_expression(
-                        context,
-                        module,
-                        builder,
-                        program,
-                        function,
-                        block,
-                        llvm_function_map,
-                        &llvm_variable_map,
-                        &mut llvm_temporaries_map,
-                        *temporary,
-                    );
+                    let llvm_temporary = ir_to_llvm_expression(&mut ctx, dispatcher, *temporary);
                     builder.build_return(Some(&llvm_temporary));
                 }
                 None => {
@@ -265,181 +267,66 @@ fn ir_to_llvm_function<'ctx>(
     );
 }
 
-fn ir_to_llvm_instruction<'ctx>(
-    context: &'ctx Context,
-    module: &Module<'ctx>,
-    builder: &Builder<'ctx>,
-    program: &Program,
-    function: &Function,
-    block: &BasicBlock,
-    llvm_function_map: &HashMap<FunctionId, FunctionValue<'ctx>>,
-    llvm_variable_map: &HashMap<VariableId, PointerValue<'ctx>>,
-    llvm_temporaries_map: &mut HashMap<BlockId, HashMap<TemporaryId, BasicValueEnum<'ctx>>>,
+fn ir_to_llvm_instruction<'a, 'ctx: 'a>(
+    ctx: &mut AccepterContext<'a, 'ctx>,
+    dispatcher: &mut Dispatcher,
     instruction_id: InstructionId,
 ) {
-    let instruction = block
+    let instruction = ctx
+        .block
         .instruction_table
         .instructions
         .get(&instruction_id)
         .unwrap();
     match &instruction.kind {
         InstructionKind::Store { pointer, temporary } => {
-            let llvm_temporary = ir_to_llvm_expression(
-                context,
-                module,
-                builder,
-                program,
-                function,
-                block,
-                llvm_function_map,
-                llvm_variable_map,
-                llvm_temporaries_map,
-                *temporary,
-            );
-            let ptr = ptr_to_llvm_ptr(
-                context,
-                module,
-                builder,
-                program,
-                function,
-                block,
-                llvm_function_map,
-                llvm_variable_map,
-                llvm_temporaries_map,
-                *pointer,
-            );
-            builder.build_store(ptr, llvm_temporary);
+            let llvm_temporary = ir_to_llvm_expression(ctx, dispatcher, *temporary);
+            let ptr = ptr_to_llvm_ptr(ctx, *pointer);
+            ctx.builder.build_store(ptr, llvm_temporary);
         }
         InstructionKind::Expression { temporary } => {
-            ir_to_llvm_expression(
-                context,
-                module,
-                builder,
-                program,
-                function,
-                block,
-                llvm_function_map,
-                llvm_variable_map,
-                llvm_temporaries_map,
-                *temporary,
-            );
+            ir_to_llvm_expression(ctx, dispatcher, *temporary);
         }
     }
 }
 
-fn ir_to_llvm_expression<'ctx>(
-    context: &'ctx Context,
-    module: &Module<'ctx>,
-    builder: &Builder<'ctx>,
-    program: &Program,
-    function: &Function,
-    block: &BasicBlock,
-    llvm_function_map: &HashMap<FunctionId, FunctionValue<'ctx>>,
-    llvm_variable_map: &HashMap<VariableId, PointerValue<'ctx>>,
-    llvm_temporaries_map: &mut HashMap<BlockId, HashMap<TemporaryId, BasicValueEnum<'ctx>>>,
+fn ir_to_llvm_expression<'a, 'ctx: 'a>(
+    ctx: &mut AccepterContext<'a, 'ctx>,
+    dispatcher: &mut Dispatcher,
     temporary_id: TemporaryId,
 ) -> BasicValueEnum<'ctx> {
-    let temporary = block
+    let temporary = ctx
+        .block
         .temporary_table
         .temporaries
         .get(&temporary_id)
         .unwrap();
     let expression = temporary.expression.as_ref().unwrap();
     let llvm_value = match &expression.kind {
-        ExpressionKind::Binary {
+        &ExpressionKind::Binary {
             operator,
             left,
             right,
-        } => match *operator {
-            BinaryOperator::Eq => {
-                let left = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    llvm_variable_map,
-                    llvm_temporaries_map,
-                    *left,
-                );
-                let right = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    llvm_variable_map,
-                    llvm_temporaries_map,
-                    *right,
-                );
-                BasicValueEnum::IntValue(builder.build_int_compare::<IntValue<'ctx>>(
-                    IntPredicate::EQ,
-                    left.into_int_value(),
-                    right.into_int_value(),
-                    "eq",
-                ))
-            }
-            BinaryOperator::Ne => todo!(),
-            BinaryOperator::Lt => todo!(),
-            BinaryOperator::Gt => todo!(),
-            BinaryOperator::Le => todo!(),
-            BinaryOperator::Ge => todo!(),
-            BinaryOperator::LogOr => todo!(),
-            BinaryOperator::LogAnd => todo!(),
-            BinaryOperator::Add => {
-                let left = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    llvm_variable_map,
-                    llvm_temporaries_map,
-                    *left,
-                );
-                let right = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    llvm_variable_map,
-                    llvm_temporaries_map,
-                    *right,
-                );
-                BasicValueEnum::IntValue(builder.build_int_add::<IntValue<'ctx>>(
-                    left.into_int_value(),
-                    right.into_int_value(),
-                    "add_int",
-                ))
-            }
-            BinaryOperator::Sub => todo!(),
-            BinaryOperator::Mul => todo!(),
-            BinaryOperator::Div => todo!(),
-            BinaryOperator::Mod => todo!(),
-            BinaryOperator::Pow => todo!(),
-            BinaryOperator::Shl => todo!(),
-            BinaryOperator::Shr => todo!(),
-            BinaryOperator::BitOr => todo!(),
-            BinaryOperator::BitAnd => todo!(),
-            BinaryOperator::BitXor => todo!(),
-        },
-        ExpressionKind::Unary { operator, right } => todo!(),
-        ExpressionKind::Convert {
+        } => {
+            let llvm_left = ir_to_llvm_expression(ctx, dispatcher, left);
+            let llvm_right = ir_to_llvm_expression(ctx, dispatcher, right);
+            dispatcher.dispatch_binary_op(ctx, operator, (left, llvm_left), (right, llvm_right))
+        }
+        &ExpressionKind::Unary { operator, right } => {
+            let llvm_right = ir_to_llvm_expression(ctx, dispatcher, right);
+            dispatcher.dispatch_unary_op(ctx, operator, (right, llvm_right))
+        }
+        &ExpressionKind::Convert {
             expression,
             from,
             to,
-        } => todo!(),
+        } => {
+            let llvm_expression = ir_to_llvm_expression(ctx, dispatcher, expression);
+            dispatcher.dispatch_conversion_op(ctx, (from, llvm_expression), to)
+        }
         ExpressionKind::Call { expression, args } => {
-            let function_type_id = block
+            let function_type_id = ctx
+                .block
                 .temporary_table
                 .temporaries
                 .get(expression)
@@ -448,62 +335,43 @@ fn ir_to_llvm_expression<'ctx>(
             let function_type = if let TypeIdKind::Callable {
                 param_types,
                 return_type,
-            } = program.type_id_table.types.get(&function_type_id).unwrap()
+            } = ctx
+                .program
+                .type_id_table
+                .types
+                .get(&function_type_id)
+                .unwrap()
             {
-                create_llvm_function_type(context, program, param_types, *return_type)
+                create_llvm_function_type(ctx.context, ctx.program, param_types, *return_type)
             } else {
                 unreachable!()
             };
             // let function_type = program.type_id_table.
-            let callee = ir_to_llvm_expression(
-                context,
-                module,
-                builder,
-                program,
-                function,
-                block,
-                llvm_function_map,
-                llvm_variable_map,
-                llvm_temporaries_map,
-                *expression,
-            );
+            let callee = ir_to_llvm_expression(ctx, dispatcher, *expression);
             let llvm_args = args
                 .iter()
-                .map(|arg| {
-                    match ir_to_llvm_expression(
-                        context,
-                        module,
-                        builder,
-                        program,
-                        function,
-                        block,
-                        llvm_function_map,
-                        llvm_variable_map,
-                        llvm_temporaries_map,
-                        *arg,
-                    ) {
-                        BasicValueEnum::ArrayValue(llvm_value) => {
-                            BasicMetadataValueEnum::ArrayValue(llvm_value)
-                        }
-                        BasicValueEnum::IntValue(llvm_value) => {
-                            BasicMetadataValueEnum::IntValue(llvm_value)
-                        }
-                        BasicValueEnum::FloatValue(llvm_value) => {
-                            BasicMetadataValueEnum::FloatValue(llvm_value)
-                        }
-                        BasicValueEnum::PointerValue(llvm_value) => {
-                            BasicMetadataValueEnum::PointerValue(llvm_value)
-                        }
-                        BasicValueEnum::StructValue(llvm_value) => {
-                            BasicMetadataValueEnum::StructValue(llvm_value)
-                        }
-                        BasicValueEnum::VectorValue(llvm_value) => {
-                            BasicMetadataValueEnum::VectorValue(llvm_value)
-                        }
+                .map(|arg| match ir_to_llvm_expression(ctx, dispatcher, *arg) {
+                    BasicValueEnum::ArrayValue(llvm_value) => {
+                        BasicMetadataValueEnum::ArrayValue(llvm_value)
+                    }
+                    BasicValueEnum::IntValue(llvm_value) => {
+                        BasicMetadataValueEnum::IntValue(llvm_value)
+                    }
+                    BasicValueEnum::FloatValue(llvm_value) => {
+                        BasicMetadataValueEnum::FloatValue(llvm_value)
+                    }
+                    BasicValueEnum::PointerValue(llvm_value) => {
+                        BasicMetadataValueEnum::PointerValue(llvm_value)
+                    }
+                    BasicValueEnum::StructValue(llvm_value) => {
+                        BasicMetadataValueEnum::StructValue(llvm_value)
+                    }
+                    BasicValueEnum::VectorValue(llvm_value) => {
+                        BasicMetadataValueEnum::VectorValue(llvm_value)
                     }
                 })
                 .collect::<Vec<_>>();
-            builder
+            ctx.builder
                 .build_indirect_call(
                     function_type,
                     callee.into_pointer_value(),
@@ -516,99 +384,167 @@ fn ir_to_llvm_expression<'ctx>(
         ExpressionKind::StructLiteral {
             struct_type,
             fields,
-        } => todo!(),
+        } => {
+            let struct_type = ctx.program.type_id_table.types.get(struct_type).unwrap();
+            let struct_id = if let TypeIdKind::UserStruct { id } = struct_type {
+                id
+            } else {
+                unreachable!()
+            };
+            let user_struct = ctx.program.user_structs.get(struct_id).unwrap();
+            let field_types = user_struct
+                .fields
+                .iter()
+                .map(|field| type_id_to_llvm_type(&ctx.context, &ctx.program, field.type_id))
+                .collect::<Vec<_>>();
+            let values = fields
+                .iter()
+                .map(|field| ir_to_llvm_expression(ctx, dispatcher, *field))
+                .collect::<Vec<_>>();
+            BasicValueEnum::StructValue(
+                ctx.context
+                    .struct_type(&field_types, false)
+                    .const_named_struct(&values),
+            )
+        }
         ExpressionKind::Literal { literal } => match literal.kind {
-            TokenLiteralKind::Bool => todo!(),
-            TokenLiteralKind::IntegerBinary => todo!(),
-            TokenLiteralKind::IntegerOctal => todo!(),
-            TokenLiteralKind::IntegerHexadecimal => todo!(),
-            TokenLiteralKind::IntegerDecimal => BasicValueEnum::IntValue(
-                context
-                    .i64_type()
-                    .const_int(literal.content.to_str().parse().unwrap(), false),
+            TokenLiteralKind::Bool => BasicValueEnum::IntValue(ctx.context.bool_type().const_int(
+                if literal.content.to_str() == "true" {
+                    1
+                } else {
+                    0
+                },
+                false,
+            )),
+            TokenLiteralKind::IntegerBinary => {
+                BasicValueEnum::IntValue(ctx.context.i64_type().const_int(
+                    i64::from_str_radix(&literal.content.to_str()[2..], 2).unwrap() as u64,
+                    false,
+                ))
+            }
+            TokenLiteralKind::IntegerOctal => {
+                BasicValueEnum::IntValue(ctx.context.i64_type().const_int(
+                    i64::from_str_radix(&literal.content.to_str()[2..], 8).unwrap() as u64,
+                    false,
+                ))
+            }
+            TokenLiteralKind::IntegerHexadecimal => {
+                BasicValueEnum::IntValue(ctx.context.i64_type().const_int(
+                    i64::from_str_radix(&literal.content.to_str()[2..], 16).unwrap() as u64,
+                    false,
+                ))
+            }
+            TokenLiteralKind::IntegerDecimal => {
+                BasicValueEnum::IntValue(ctx.context.i64_type().const_int(
+                    i64::from_str_radix(literal.content.to_str(), 10).unwrap() as u64,
+                    false,
+                ))
+            }
+            TokenLiteralKind::Float => BasicValueEnum::FloatValue(
+                ctx.context
+                    .f64_type()
+                    .const_float_from_string(literal.content.to_str()),
             ),
-            TokenLiteralKind::Float => todo!(),
-            TokenLiteralKind::Character { terminated } => todo!(),
-            TokenLiteralKind::String { terminated } => todo!(),
+            TokenLiteralKind::Character { .. } => {
+                BasicValueEnum::IntValue(ctx.context.i64_type().const_int(
+                    literal.content.to_str().chars().next().unwrap() as u64,
+                    false,
+                ))
+            }
+            TokenLiteralKind::String { terminated } => {
+                let content = literal.content.to_str();
+                let content = if terminated {
+                    &content[1..content.len() - 1]
+                } else {
+                    &content[1..]
+                };
+
+                let array = ctx.context.const_string(content.as_bytes(), false);
+                let global = ctx.module.add_global(array.get_type(), None, "string");
+                global.set_initializer(&array);
+
+                BasicValueEnum::PointerValue(global.as_pointer_value())
+            }
         },
-        ExpressionKind::ElementPointer { base, indices } => todo!(),
-        ExpressionKind::Pointer { pointer } => BasicValueEnum::PointerValue(ptr_to_llvm_ptr(
-            context,
-            module,
-            builder,
-            program,
-            function,
-            block,
-            llvm_function_map,
-            llvm_variable_map,
-            llvm_temporaries_map,
-            *pointer,
-        )),
+        ExpressionKind::ElementPointer { base, indices } => {
+            let base = ir_to_llvm_expression(ctx, dispatcher, *base);
+            let mut indices = indices
+                .iter()
+                .map(|index| ir_to_llvm_expression(ctx, dispatcher, *index))
+                .collect::<Vec<_>>();
+            let mut pointer = match base {
+                BasicValueEnum::PointerValue(llvm_value) => llvm_value,
+                BasicValueEnum::IntValue(llvm_value) => ctx.builder.build_int_to_ptr(
+                    llvm_value,
+                    ctx.context.i64_type().ptr_type(AddressSpace::Generic),
+                    "int_to_ptr",
+                ),
+                BasicValueEnum::StructValue(llvm_value) => ctx.builder.build_struct_gep(
+                    llvm_value,
+                    indices.remove(0).into_int_value(),
+                    "struct_gep",
+                ),
+                _ => unreachable!(),
+            };
+            for index in indices {
+                pointer = ctx.builder.build_gep(pointer, &[index], "gep");
+            }
+            BasicValueEnum::PointerValue(pointer)
+        }
+        ExpressionKind::Pointer { pointer } => {
+            BasicValueEnum::PointerValue(ptr_to_llvm_ptr(ctx, *pointer))
+        }
         ExpressionKind::Load { pointer } => match *pointer {
             Pointer::Function(..) => unreachable!(),
             Pointer::Variable(variable) => {
-                let type_id = function
+                let type_id = ctx
+                    .function
                     .variable_table
                     .variables
                     .get(&variable)
                     .unwrap()
                     .type_id;
-                let llvm_type = type_id_to_llvm_type(context, program, type_id);
-                let llvm_variable = llvm_variable_map.get(&variable).unwrap().clone();
-                builder.build_load(llvm_type, llvm_variable, "load_var")
+                let llvm_type = type_id_to_llvm_type(ctx.context, ctx.program, type_id);
+                let llvm_variable = ctx.llvm_variable_map.get(&variable).unwrap().clone();
+                ctx.builder.build_load(llvm_type, llvm_variable, "load_var")
             }
             Pointer::RawPointer(temporary) => {
-                let type_id = block
+                let type_id = ctx
+                    .block
                     .temporary_table
                     .temporaries
                     .get(&temporary)
                     .unwrap()
                     .type_id;
-                let llvm_type = type_id_to_llvm_type(context, program, type_id);
-                let llvm_temporary = ir_to_llvm_expression(
-                    context,
-                    module,
-                    builder,
-                    program,
-                    function,
-                    block,
-                    llvm_function_map,
-                    llvm_variable_map,
-                    llvm_temporaries_map,
-                    temporary,
-                );
-                builder.build_load(llvm_type, llvm_temporary.into_pointer_value(), "load_raw")
+                let llvm_type = type_id_to_llvm_type(ctx.context, ctx.program, type_id);
+                let llvm_temporary = ir_to_llvm_expression(ctx, dispatcher, temporary);
+                ctx.builder
+                    .build_load(llvm_type, llvm_temporary.into_pointer_value(), "load_raw")
             }
         },
     };
-    llvm_temporaries_map
-        .get_mut(&block.id)
+    ctx.llvm_temporaries_map
+        .get_mut(&ctx.block.id)
         .unwrap()
         .insert(temporary_id, llvm_value.clone());
     llvm_value
 }
 
-fn ptr_to_llvm_ptr<'ctx>(
-    context: &'ctx Context,
-    module: &Module<'ctx>,
-    builder: &Builder<'ctx>,
-    program: &Program,
-    function: &Function,
-    block: &BasicBlock,
-    llvm_function_map: &HashMap<FunctionId, FunctionValue<'ctx>>,
-    llvm_variable_map: &HashMap<VariableId, PointerValue<'ctx>>,
-    llvm_temporaries_map: &mut HashMap<BlockId, HashMap<TemporaryId, BasicValueEnum<'ctx>>>,
+fn ptr_to_llvm_ptr<'a, 'ctx>(
+    ctx: &mut AccepterContext<'a, 'ctx>,
     pointer: Pointer,
 ) -> PointerValue<'ctx> {
     match pointer {
-        Pointer::Function(id) => llvm_function_map
+        Pointer::Function(id) => ctx
+            .llvm_function_map
             .get(&id)
             .unwrap()
             .as_global_value()
             .as_pointer_value(),
-        Pointer::Variable(id) => llvm_variable_map.get(&id).unwrap().clone(),
-        Pointer::RawPointer(id) => llvm_temporaries_map
-            .get(&block.id)
+        Pointer::Variable(id) => ctx.llvm_variable_map.get(&id).unwrap().clone(),
+        Pointer::RawPointer(id) => ctx
+            .llvm_temporaries_map
+            .get(&ctx.block.id)
             .unwrap()
             .get(&id)
             .unwrap()

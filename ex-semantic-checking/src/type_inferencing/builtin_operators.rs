@@ -210,14 +210,6 @@ impl BuiltInBinaryOperator {
                     TypeKind::float(),
                 ),
                 (
-                    (
-                        HIRBinaryOperatorKind::Add,
-                        TypeKind::string(),
-                        TypeKind::string(),
-                    ),
-                    TypeKind::string(),
-                ),
-                (
                     (HIRBinaryOperatorKind::Sub, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
@@ -242,22 +234,6 @@ impl BuiltInBinaryOperator {
                     TypeKind::float(),
                 ),
                 (
-                    (
-                        HIRBinaryOperatorKind::Mul,
-                        TypeKind::string(),
-                        TypeKind::int(),
-                    ),
-                    TypeKind::string(),
-                ),
-                (
-                    (
-                        HIRBinaryOperatorKind::Mul,
-                        TypeKind::int(),
-                        TypeKind::string(),
-                    ),
-                    TypeKind::string(),
-                ),
-                (
                     (HIRBinaryOperatorKind::Div, TypeKind::int(), TypeKind::int()),
                     TypeKind::int(),
                 ),
@@ -280,10 +256,6 @@ impl BuiltInBinaryOperator {
                         TypeKind::float(),
                     ),
                     TypeKind::float(),
-                ),
-                (
-                    (HIRBinaryOperatorKind::Pow, TypeKind::int(), TypeKind::int()),
-                    TypeKind::int(),
                 ),
                 (
                     (

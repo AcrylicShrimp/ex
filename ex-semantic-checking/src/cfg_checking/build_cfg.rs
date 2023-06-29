@@ -131,7 +131,7 @@ impl BasicBlockInstruction {
 }
 
 #[derive(Debug, Clone, Hash)]
-pub struct Scope {
+pub(crate) struct Scope {
     pub variables: Vec<TypeKind>,
 }
 
