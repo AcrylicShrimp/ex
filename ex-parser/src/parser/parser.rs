@@ -1,7 +1,6 @@
 use crate::{Lookup, Token, TokenKind, TokenLiteralKind};
 use ex_diagnostics::DiagnosticsSender;
-use ex_span::{SourceFile, Span};
-use std::sync::Arc;
+use ex_span::Span;
 
 pub struct Parser<'d, T>
 where
@@ -10,7 +9,6 @@ where
     first: Lookup,
     second: Lookup,
     tok: T,
-    file: Arc<SourceFile>,
     diagnostics: &'d DiagnosticsSender,
 }
 
@@ -18,14 +16,13 @@ impl<'d, T> Parser<'d, T>
 where
     T: Iterator<Item = Token>,
 {
-    pub fn new(mut tok: T, file: Arc<SourceFile>, diagnostics: &'d DiagnosticsSender) -> Self {
+    pub fn new(mut tok: T, diagnostics: &'d DiagnosticsSender) -> Self {
         let first = tok.next();
 
         Self {
             first: Lookup::new(first),
             second: Lookup::new(tok.next()),
             tok,
-            file,
             diagnostics,
         }
     }
@@ -34,7 +31,7 @@ where
         self.first
             .token()
             .as_ref()
-            .map_or_else(|| self.file.span_end(), |token| token.span)
+            .map_or_else(|| self.diagnostics.file().span_end(), |token| token.span)
     }
 
     pub fn first(&self) -> &Lookup {

@@ -21,7 +21,7 @@ pub fn parse_ast(
 ) -> (ASTProgram, NodeIdAllocator) {
     let mut id_alloc = NodeIdAllocator::new();
     let token_iter = token_iter(&file);
-    let mut parser = Parser::new(token_iter, file.clone(), diagnostics);
+    let mut parser = Parser::new(token_iter, diagnostics);
     (
         parse_ast_program(&mut id_alloc, &mut parser, &file, &diagnostics),
         id_alloc,
