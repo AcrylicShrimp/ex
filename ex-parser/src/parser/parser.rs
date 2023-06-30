@@ -51,7 +51,7 @@ where
 
     pub fn consume(&mut self) {
         if let Some(token) = self.first.token() {
-            check_token(token, &self.file, &self.diagnostics);
+            check_token(token, &self.diagnostics);
         }
 
         self.first = self.second.take();
@@ -59,7 +59,7 @@ where
     }
 }
 
-fn check_token(token: &Token, file: &Arc<SourceFile>, diagnostics: &DiagnosticsSender) {
+fn check_token(token: &Token, diagnostics: &DiagnosticsSender) {
     match token.kind {
         TokenKind::Unknown { .. } => {
             diagnostics.error_sub(
