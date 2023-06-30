@@ -8,20 +8,20 @@ pub use lexer::*;
 pub use low_lexer::*;
 pub use parser::*;
 
-use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
+use ex_diagnostics::DiagnosticsSender;
 use ex_span::SourceFile;
 use ex_symbol::Symbol;
-use std::sync::{mpsc::Sender, Arc};
+use std::sync::Arc;
 
 // How about to include token delimiter for error recovery?
 
 pub fn parse_ast(
     file: Arc<SourceFile>,
-    diagnostics: Arc<Sender<Diagnostics>>,
+    diagnostics: &DiagnosticsSender,
 ) -> (ASTProgram, NodeIdAllocator) {
     let mut id_alloc = NodeIdAllocator::new();
     let token_iter = token_iter(&file);
-    let mut parser = Parser::new(token_iter, file.clone(), diagnostics.clone());
+    let mut parser = Parser::new(token_iter, file.clone(), diagnostics);
     (
         parse_ast_program(&mut id_alloc, &mut parser, &file, &diagnostics),
         id_alloc,
@@ -32,7 +32,7 @@ fn parse_ast_program(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> ASTProgram {
     let mut top_levels = Vec::new();
 
@@ -54,7 +54,7 @@ fn parse_ast_toplevel(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTTopLevel, ()> {
     if parser.first().is_keyword(*crate::KEYWORD_FN) {
         let item = parse_function(id_alloc, parser, file, diagnostics)?;
@@ -94,7 +94,7 @@ fn parse_function(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTFunction, ()> {
     let signature = parse_function_signature(id_alloc, parser, file, diagnostics)?;
 
@@ -113,7 +113,7 @@ fn parse_function_signature(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTFunctionSignature, ()> {
     let keyword_fn = if let Some(id) = parser.first().keyword(*crate::KEYWORD_FN) {
         parser.consume();
@@ -184,7 +184,7 @@ fn parse_function_params(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<ASTFunctionParam>, ()> {
     let mut params = Vec::new();
 
@@ -232,7 +232,7 @@ fn parse_function_return_type(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTFunctionReturnType, ()> {
     let arrow = if let Some(id) = parser.first().kind(TokenKind::Arrow) {
         parser.consume();
@@ -257,7 +257,7 @@ fn parse_struct(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTStruct, ()> {
     let keyword_struct = if let Some(id) = parser.first().keyword(*crate::KEYWORD_STRUCT) {
         parser.consume();
@@ -314,7 +314,7 @@ fn parse_struct_fields(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<ASTStructField>, ()> {
     let mut fields = Vec::new();
 
@@ -363,7 +363,7 @@ fn parse_statement(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTStatement, ()> {
     if parser.first().is_kind(TokenKind::OpenBrace) {
         let block_statement = parse_block(id_alloc, parser, file, diagnostics)?;
@@ -431,7 +431,7 @@ fn parse_block(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTBlock, ()> {
     let brace_open = if let Some(id) = parser.first().kind(TokenKind::OpenBrace) {
         parser.consume();
@@ -470,7 +470,7 @@ fn parse_let(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTLet, ()> {
     let keyword_let = if let Some(id) = parser.first().keyword(*crate::KEYWORD_LET) {
         parser.consume();
@@ -524,7 +524,7 @@ fn parse_let_type(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTLetType, ()> {
     let colon = if let Some(id) = parser.first().kind(TokenKind::Colon) {
         parser.consume();
@@ -549,7 +549,7 @@ fn parse_let_assignment(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTLetAssignment, ()> {
     let assignment = if let Some(id) = parser.first().kind(TokenKind::Assign) {
         parser.consume();
@@ -574,7 +574,7 @@ fn parse_if(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTIf, ()> {
     let keyword_if = if let Some(id) = parser.first().keyword(*crate::KEYWORD_IF) {
         parser.consume();
@@ -615,7 +615,7 @@ fn parse_single_else_ifs(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<ASTSingleElseIf>, ()> {
     let mut single_else_ifs = Vec::new();
 
@@ -654,7 +654,7 @@ fn parse_single_else(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTSingleElse, ()> {
     let keyword_else = if let Some(id) = parser.first().keyword(*crate::KEYWORD_ELSE) {
         parser.consume();
@@ -679,7 +679,7 @@ fn parse_loop(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTLoop, ()> {
     let keyword_loop = if let Some(id) = parser.first().keyword(*crate::KEYWORD_LOOP) {
         parser.consume();
@@ -704,7 +704,7 @@ fn parse_while(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTWhile, ()> {
     let keyword_while = if let Some(id) = parser.first().keyword(*crate::KEYWORD_WHILE) {
         parser.consume();
@@ -731,7 +731,7 @@ fn parse_while(
 fn parse_break(
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTBreak, ()> {
     let keyword_break = if let Some(id) = parser.first().keyword(*crate::KEYWORD_BREAK) {
         parser.consume();
@@ -761,7 +761,7 @@ fn parse_break(
 fn parse_continue(
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTContinue, ()> {
     let keyword_continue = if let Some(id) = parser.first().keyword(*crate::KEYWORD_CONTINUE) {
         parser.consume();
@@ -797,7 +797,7 @@ fn parse_return(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTReturn, ()> {
     let keyword_return = if let Some(id) = parser.first().keyword(*crate::KEYWORD_RETURN) {
         parser.consume();
@@ -835,7 +835,7 @@ fn parse_assignment_or_row(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTStatement, ()> {
     let left = parse_expression(true, id_alloc, parser, file, diagnostics)?;
 
@@ -947,7 +947,7 @@ fn parse_expression(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     parse_binary_expression_compare(allow_struct_literal, id_alloc, parser, file, diagnostics)
 }
@@ -957,7 +957,7 @@ fn parse_binary_expression_compare(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_logical_or_and(
         allow_struct_literal,
@@ -1016,7 +1016,7 @@ fn parse_binary_expression_logical_or_and(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_arithmetic_add_sub(
         allow_struct_literal,
@@ -1063,7 +1063,7 @@ fn parse_binary_expression_arithmetic_add_sub(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_arithmetic_mul_div_mod(
         allow_struct_literal,
@@ -1115,7 +1115,7 @@ fn parse_binary_expression_arithmetic_mul_div_mod(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_arithmetic_pow(
         allow_struct_literal,
@@ -1165,7 +1165,7 @@ fn parse_binary_expression_arithmetic_pow(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_bit_shift(
         allow_struct_literal,
@@ -1208,7 +1208,7 @@ fn parse_binary_expression_bit_shift(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_binary_expression_bit_or_and_xor(
         allow_struct_literal,
@@ -1255,7 +1255,7 @@ fn parse_binary_expression_bit_or_and_xor(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left =
         parse_unary_expression(allow_struct_literal, id_alloc, parser, file, diagnostics)?;
@@ -1299,7 +1299,7 @@ fn parse_unary_expression(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let (operator, operator_kind) = if let Some(id) = parser.first().kind(TokenKind::Add) {
         parser.consume();
@@ -1344,7 +1344,7 @@ fn parse_as_expression(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left = parse_call_expression_or_member_access(
         allow_struct_literal,
@@ -1386,7 +1386,7 @@ fn parse_call_expression_or_member_access(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     let mut left =
         parse_single_expression(allow_struct_literal, id_alloc, parser, file, diagnostics)?;
@@ -1464,7 +1464,7 @@ fn parse_call_args(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<ASTArgExpression>, ()> {
     let mut args = Vec::new();
 
@@ -1497,7 +1497,7 @@ fn parse_single_expression(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     if parser.first().is_kind(TokenKind::OpenParen) {
         let paren = parse_paren_expression(id_alloc, parser, file, diagnostics)?;
@@ -1536,7 +1536,7 @@ fn parse_paren_expression(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTParenExpression, ()> {
     let paren_open = if let Some(id) = parser.first().kind(TokenKind::OpenParen) {
         parser.consume();
@@ -1571,7 +1571,7 @@ fn parse_id_reference_or_struct_literal(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTExpression, ()> {
     if allow_struct_literal
         && parser.first().is_id()
@@ -1608,7 +1608,7 @@ fn parse_struct_literal(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<ASTStructLiteral, ()> {
     let typename = if let Some(id) = parser.first().id() {
         parser.consume();
@@ -1655,7 +1655,7 @@ fn parse_struct_literal_fields(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<ASTStructLiteralField>, ()> {
     let mut fields = Vec::new();
 
@@ -1705,7 +1705,7 @@ fn parse_typename(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Typename, ()> {
     let mut typename = parse_ptr_typename(id_alloc, parser, file, diagnostics)?;
 
@@ -1738,7 +1738,7 @@ fn parse_ptr_typename(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Typename, ()> {
     let mut typename = parse_simple_typename(id_alloc, parser, file, diagnostics)?;
 
@@ -1771,7 +1771,7 @@ fn parse_simple_typename(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Typename, ()> {
     if parser.first().is_keyword(*crate::KEYWORD_FN) {
         let function = parse_typename_function(id_alloc, parser, file, diagnostics)?;
@@ -1802,7 +1802,7 @@ fn parse_typename_function(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<TypenameCallable, ()> {
     let keyword_fn = if let Some(id) = parser.first().keyword(*crate::KEYWORD_FN) {
         parser.consume();
@@ -1864,7 +1864,7 @@ fn parse_typename_function_params(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<Vec<TypenameFunctionParam>, ()> {
     let mut params = Vec::new();
 
@@ -1894,7 +1894,7 @@ fn parse_typename_function_return_type(
     id_alloc: &mut NodeIdAllocator,
     parser: &mut Parser<impl Iterator<Item = Token>>,
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) -> Result<TypenameFunctionReturnType, ()> {
     let arrow = if let Some(id) = parser.first().kind(TokenKind::Arrow) {
         parser.consume();
@@ -1919,7 +1919,7 @@ fn unexpected_token(
     lookup: &Lookup,
     expected_symbols: &[Symbol],
     file: &Arc<SourceFile>,
-    diagnostics: &Sender<Diagnostics>,
+    diagnostics: &DiagnosticsSender,
 ) {
     let (message, span) = if let Some(token) = lookup.token() {
         (
@@ -1930,26 +1930,16 @@ fn unexpected_token(
         (format!("unexpected end of file"), file.span_end())
     };
 
-    diagnostics
-        .send(Diagnostics {
-            level: DiagnosticsLevel::Error,
-            message,
-            origin: Some(DiagnosticsOrigin {
-                file: file.clone(),
-                span,
-            }),
-            sub_diagnostics: vec![SubDiagnostics {
-                level: DiagnosticsLevel::Hint,
-                message: format!(
-                    "expected one of: {}",
-                    expected_symbols
-                        .iter()
-                        .map(|symbol| symbol.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                ),
-                origin: None,
-            }],
-        })
-        .unwrap();
+    diagnostics.error_sub(
+        span,
+        message,
+        vec![diagnostics.sub_hint_simple(format!(
+            "expected one of: {}",
+            expected_symbols
+                .iter()
+                .map(|symbol| symbol.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))],
+    );
 }

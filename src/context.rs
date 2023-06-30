@@ -20,10 +20,14 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn compile(file: Arc<SourceFile>, diagnostics: Sender<Diagnostics>) -> Self {
-        let (ast, mut id_alloc) = parse_ast(file.clone(), Arc::new(diagnostics.clone()));
-
+    pub fn compile(file: Arc<SourceFile>, diagnostics: Sender<Diagnostics>) -> Option<Self> {
         let diagnostics = DiagnosticsSender::new(file.clone(), diagnostics);
+        let (ast, mut id_alloc) = parse_ast(file.clone(), &diagnostics);
+
+        if diagnostics.has_error() {
+            return None;
+        }
+
         let unresolved_top_level_table = build_unresolved_top_levels(&ast, &diagnostics);
         let top_level_table = build_top_levels(&unresolved_top_level_table, &diagnostics);
         let reference_table = build_references(&unresolved_top_level_table, &ast, &diagnostics);
@@ -44,14 +48,14 @@ impl Context {
         let mut cfg = build_cfg(&type_table, &hir, &diagnostics);
         check_cfg(&mut cfg, &top_level_table, &diagnostics);
 
-        Self {
+        Some(Self {
             ast,
             top_level_table,
             reference_table,
             hir,
             type_table,
             cfg,
-        }
+        })
     }
 
     pub fn codegen(self) -> Program {

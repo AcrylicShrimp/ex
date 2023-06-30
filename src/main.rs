@@ -38,6 +38,7 @@ fn main() {
     }
 
     for context in contexts {
+        let context = context.unwrap();
         let program = context.codegen();
         let backend = Backend::new();
         let module = backend.compile(&program);

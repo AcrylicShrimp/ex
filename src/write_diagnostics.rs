@@ -2,24 +2,24 @@ use colored::{ColoredString, Colorize};
 use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin};
 
 pub fn write_diagnostics(diagnostics: &Diagnostics) {
-    eprintln!("{}", select_color(diagnostics.level, &diagnostics.message));
+    eprintln!("{}", apply_level(diagnostics.level, &diagnostics.message));
 
     if let Some(origin) = &diagnostics.origin {
-        write_diagnostics_origin(origin);
+        write_diagnostics_origin(diagnostics.level, &diagnostics.message, origin);
     }
 
     for sub in &diagnostics.sub_diagnostics {
-        eprintln!("{}", select_color(sub.level, &sub.message));
+        eprintln!("{}", apply_level(sub.level, &sub.message));
 
         if let Some(origin) = &sub.origin {
-            write_diagnostics_origin(origin);
+            write_diagnostics_origin(sub.level, &sub.message, origin);
         }
     }
 
     eprintln!();
 }
 
-fn write_diagnostics_origin(origin: &DiagnosticsOrigin) {
+fn write_diagnostics_origin(level: DiagnosticsLevel, message: &str, origin: &DiagnosticsOrigin) {
     if let Some(path) = origin.file.path() {
         let line_col = origin.file.find_line_col(origin.span.low);
         eprintln!(
@@ -37,63 +37,117 @@ fn write_diagnostics_origin(origin: &DiagnosticsOrigin) {
         eprintln!("at ?:{}:{}", line_col.line + 1, line_col.column + 1)
     }
 
-    let line_low = origin.file.find_line(origin.span.low);
-    let line_high = origin.file.find_line(origin.span.high);
+    let line_col_low = origin.file.find_line_col(origin.span.low);
+    let line_col_high = origin.file.find_line_col(origin.span.high);
 
     let max_line = (origin.file.line_positions().len() - 1) as u32;
-    let line_low = if line_low == 0 { 0 } else { line_low - 1 };
-    let line_high = if line_high == max_line {
+
+    let line_low = if line_col_low.line == 0 {
+        0
+    } else {
+        line_col_low.line - 1
+    };
+    let line_high = if line_col_high.line == max_line {
         max_line
     } else {
-        line_high + 1
+        line_col_high.line + 1
     };
 
     let max_line_number_width = ((line_high + 1) as f64).log(10f64).ceil() as usize;
 
-    // let visual_span = Span::new(
-    //     origin.file.line_positions()[line_low as usize],
-    //     origin.file.line_positions()[line_high as usize + 1],
-    // );
+    if line_low != line_col_low.line {
+        eprintln!(
+            "{:>width$} | {}",
+            line_low + 1,
+            origin.file.slice_line(line_low),
+            width = max_line_number_width + 1
+        );
+    }
 
-    for line in line_low..=line_high {
-        let line_str = origin.file.slice_line(line);
-        let line_low_pos = origin.file.line_positions()[line as usize];
+    if line_col_low.line != line_col_high.line {
+        let line = origin.file.slice_line(line_col_low.line);
+        eprintln!(
+            "{:>width$} | {}",
+            line_col_low.line + 1,
+            line,
+            width = max_line_number_width + 1
+        );
+        eprintln!(
+            "{}{}",
+            " ".repeat(max_line_number_width + 4 + line_col_low.column as usize),
+            apply_level_color(
+                level,
+                &"^".repeat(line.len() - line_col_low.column as usize)
+            )
+        );
+    }
 
-        // let line_str = if origin.span.contains_span(line_span) {
-        //     &[line_str.bold()]
-        // } else if line_span.contains_span(origin.span) {
-        //     &[line_str[(origin.span.low - line_span.low).get() as usize
-        //         ..(origin.span.high - line_span.low).get() as usize]
-        //         .bold()]
-        // } else {
-        //     &[line_str.normal()]
-        // };
+    if 2 <= line_col_high.line - line_col_low.line {
+        eprintln!(" ...");
+    }
 
-        eprint!("{:>width$} | ", line + 1, width = max_line_number_width + 1);
+    if line_col_low.line == line_col_high.line {
+        let line = origin.file.slice_line(line_col_high.line);
+        eprintln!(
+            "{:>width$} | {}",
+            line_col_high.line + 1,
+            line,
+            width = max_line_number_width + 1
+        );
+        eprintln!(
+            "{}{}{}",
+            " ".repeat(max_line_number_width + 4 + line_col_low.column as usize),
+            apply_level_color(
+                level,
+                &"^".repeat(line_col_high.column as usize - line_col_low.column as usize)
+            ),
+            apply_level_color(level, &format!(" {}", message))
+        );
+    } else {
+        let line = origin.file.slice_line(line_col_high.line);
+        eprintln!(
+            "{:>width$} | {}",
+            line_col_high.line + 1,
+            line,
+            width = max_line_number_width + 1
+        );
+        eprintln!(
+            "{}{}{}",
+            " ".repeat(max_line_number_width + 4),
+            apply_level_color(
+                level,
+                &"^".repeat(usize::max(line_col_high.column as usize, 1))
+            ),
+            apply_level_color(level, &format!(" {}", message))
+        );
+    }
 
-        for (i, c) in line_str.chars().enumerate() {
-            if origin.span.contains_pos(line_low_pos + i as u32) {
-                eprint!("{}", c.to_string().magenta());
-            } else {
-                eprint!("{}", c.to_string().normal());
-            }
-        }
-
-        eprintln!();
-
-        // eprintln!(
-        //     "{:>width$} | {}",
-        //     line + 1,
-        //     line_str,
-        //     width = max_line_number_width + 1
-        // );
+    if line_high != line_col_high.line {
+        eprintln!(
+            "{:>width$} | {}",
+            line_high + 1,
+            origin.file.slice_line(line_high),
+            width = max_line_number_width + 1
+        );
     }
 }
 
-fn select_color(level: DiagnosticsLevel, str: &str) -> ColoredString {
+fn apply_level(level: DiagnosticsLevel, str: &str) -> ColoredString {
     match level {
-        DiagnosticsLevel::Error => format!("{} {}", "error:".bold(), str).red(),
-        DiagnosticsLevel::Warning => format!("{} {}", " warn:".bold(), str).yellow(),
-        DiagnosticsLevel::Hint => format!("{} {}", " hint:".bold(), str).bright_green(),
+        DiagnosticsLevel::Error => {
+            apply_level_color(level, &format!("{} {}", "error:".bold(), str))
+        }
+        DiagnosticsLevel::Warning => {
+            apply_level_color(level, &format!("{} {}", " warn:".bold(), str))
+        }
+        DiagnosticsLevel::Hint => apply_level_color(level, &format!("{} {}", " hint:".bold(), str)),
+    }
+}
+
+fn apply_level_color(level: DiagnosticsLevel, str: &str) -> ColoredString {
+    match level {
+        DiagnosticsLevel::Error => str.red(),
+        DiagnosticsLevel::Warning => str.yellow(),
+        DiagnosticsLevel::Hint => str.bright_green(),
     }
 }

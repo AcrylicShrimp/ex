@@ -1,9 +1,9 @@
 use crate::{Lookup, Token, TokenKind, TokenLiteralKind};
-use ex_diagnostics::{Diagnostics, DiagnosticsLevel, DiagnosticsOrigin, SubDiagnostics};
+use ex_diagnostics::DiagnosticsSender;
 use ex_span::{SourceFile, Span};
-use std::sync::{mpsc::Sender, Arc};
+use std::sync::Arc;
 
-pub struct Parser<T>
+pub struct Parser<'d, T>
 where
     T: Iterator<Item = Token>,
 {
@@ -11,14 +11,14 @@ where
     second: Lookup,
     tok: T,
     file: Arc<SourceFile>,
-    diagnostics: Arc<Sender<Diagnostics>>,
+    diagnostics: &'d DiagnosticsSender,
 }
 
-impl<T> Parser<T>
+impl<'d, T> Parser<'d, T>
 where
     T: Iterator<Item = Token>,
 {
-    pub fn new(mut tok: T, file: Arc<SourceFile>, diagnostics: Arc<Sender<Diagnostics>>) -> Self {
+    pub fn new(mut tok: T, file: Arc<SourceFile>, diagnostics: &'d DiagnosticsSender) -> Self {
         let first = tok.next();
 
         Self {
@@ -59,48 +59,22 @@ where
     }
 }
 
-fn check_token(token: &Token, file: &Arc<SourceFile>, diagnostics: &Sender<Diagnostics>) {
+fn check_token(token: &Token, file: &Arc<SourceFile>, diagnostics: &DiagnosticsSender) {
     match token.kind {
         TokenKind::Unknown { .. } => {
-            diagnostics
-                .send(Diagnostics {
-                    level: DiagnosticsLevel::Error,
-                    message: format!("unknown token found"),
-                    origin: Some(DiagnosticsOrigin {
-                        file: file.clone(),
-                        span: token.span,
-                    }),
-                    sub_diagnostics: vec![SubDiagnostics {
-                        level: DiagnosticsLevel::Hint,
-                        message: format!("remove this token"),
-                        origin: Some(DiagnosticsOrigin {
-                            file: file.clone(),
-                            span: token.span,
-                        }),
-                    }],
-                })
-                .unwrap();
+            diagnostics.error_sub(
+                token.span,
+                format!("unknown token found"),
+                vec![diagnostics.sub_hint(token.span, format!("remove this token"))],
+            );
         }
         TokenKind::Literal(literal) => {
             if literal.suffix.is_some() {
-                diagnostics
-                    .send(Diagnostics {
-                        level: DiagnosticsLevel::Error,
-                        message: format!("unknown suffix found"),
-                        origin: Some(DiagnosticsOrigin {
-                            file: file.clone(),
-                            span: token.span,
-                        }),
-                        sub_diagnostics: vec![SubDiagnostics {
-                            level: DiagnosticsLevel::Hint,
-                            message: format!("remove the suffix"),
-                            origin: Some(DiagnosticsOrigin {
-                                file: file.clone(),
-                                span: token.span,
-                            }),
-                        }],
-                    })
-                    .unwrap();
+                diagnostics.error_sub(
+                    token.span,
+                    format!("unknown suffix found"),
+                    vec![diagnostics.sub_hint(token.span, format!("remove this suffix"))],
+                );
             }
 
             match literal.kind {
@@ -108,24 +82,11 @@ fn check_token(token: &Token, file: &Arc<SourceFile>, diagnostics: &Sender<Diagn
                 | TokenLiteralKind::String { terminated }
                     if !terminated =>
                 {
-                    diagnostics
-                        .send(Diagnostics {
-                            level: DiagnosticsLevel::Error,
-                            message: format!("unterminated literal found"),
-                            origin: Some(DiagnosticsOrigin {
-                                file: file.clone(),
-                                span: token.span,
-                            }),
-                            sub_diagnostics: vec![SubDiagnostics {
-                                level: DiagnosticsLevel::Hint,
-                                message: format!("add a closing delimiter"),
-                                origin: Some(DiagnosticsOrigin {
-                                    file: file.clone(),
-                                    span: token.span,
-                                }),
-                            }],
-                        })
-                        .unwrap();
+                    diagnostics.error_sub(
+                        token.span,
+                        format!("unterminated literal found"),
+                        vec![diagnostics.sub_hint(token.span, format!("add a closing delimiter"))],
+                    );
                 }
                 _ => {}
             }
