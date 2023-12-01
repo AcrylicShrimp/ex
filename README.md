@@ -1,5 +1,10 @@
 # ex
 
+## this project has been moved
+See: https://github.com/AcrylicShrimp/exc
+
+---
+
 Write your own logic with minimal effort.
 
 ```
