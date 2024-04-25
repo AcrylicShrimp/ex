@@ -2,6 +2,8 @@
 pub struct Symbol(pub u32);
 
 impl Symbol {
+    pub const EMPTY: Self = Symbol::new_const(0);
+
     pub fn new(index: u32) -> Self {
         Self(index)
     }

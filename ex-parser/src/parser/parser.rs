@@ -48,7 +48,7 @@ where
 
     pub fn consume(&mut self) {
         if let Some(token) = self.first.token() {
-            check_token(token, &self.diagnostics);
+            check_token(&token, &self.diagnostics);
         }
 
         self.first = self.second.take();

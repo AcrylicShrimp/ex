@@ -2,5 +2,9 @@
   "[rust]": {
     "editor.insertSpaces": true,
     "editor.tabSize": 4
-  }
+  },
+  "rust-analyzer.server.extraEnv": {
+    "LLVM_SYS_160_PREFIX": "/opt/homebrew/Cellar/llvm/16.0.1/"
+  },
+  "rust-analyzer.showUnlinkedFileNotification": false
 }

@@ -11,8 +11,8 @@ impl Lookup {
         Self { token }
     }
 
-    pub fn token(&self) -> &Option<Token> {
-        &self.token
+    pub fn token(&self) -> Option<Token> {
+        self.token.clone()
     }
 
     pub fn is_exists(&self) -> bool {
@@ -34,6 +34,16 @@ impl Lookup {
 
     pub fn is_id(&self) -> bool {
         self.id().is_some()
+    }
+
+    pub fn token_kind(&self, kind: TokenKind) -> Option<Token> {
+        self.token.as_ref().and_then(|token| {
+            if token.kind == kind {
+                Some(token.clone())
+            } else {
+                None
+            }
+        })
     }
 
     pub fn kind(&self, kind: TokenKind) -> Option<Id> {

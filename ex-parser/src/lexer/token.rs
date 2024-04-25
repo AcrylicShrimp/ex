@@ -3,19 +3,19 @@ use ex_span::Span;
 
 #[derive(Debug, Clone, Hash)]
 pub struct Token {
-    pub kind: TokenKind,
     pub span: Span,
+    pub kind: TokenKind,
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, span: Span) -> Self {
-        Self { kind, span }
+    pub fn new(span: Span, kind: TokenKind) -> Self {
+        Self { span, kind }
     }
 
     pub fn glue(&self, next: &Self) -> Option<Self> {
         let kind = match self.kind {
             TokenKind::Colon => match next.kind {
-                TokenKind::Colon => TokenKind::ModuleMember,
+                TokenKind::Colon => TokenKind::PathSep,
                 _ => return None,
             },
             TokenKind::Dot => match next.kind {
@@ -122,11 +122,11 @@ impl Token {
             | TokenKind::BitNot
             | TokenKind::LogOr
             | TokenKind::LogAnd
-            | TokenKind::ModuleMember
+            | TokenKind::PathSep
             | TokenKind::Literal { .. }
             | TokenKind::Id { .. } => return None,
         };
 
-        Some(Token::new(kind, self.span.to(next.span)))
+        Some(Token::new(self.span.to(next.span), kind))
     }
 }

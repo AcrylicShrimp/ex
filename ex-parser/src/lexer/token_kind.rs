@@ -57,7 +57,7 @@ pub enum TokenKind {
     BitNot, // "~"
     LogNot, // "!"
     // Module access operators
-    ModuleMember, // "::"
+    PathSep, // "::"
     Id { symbol: Symbol },
     Literal(TokenLiteral),
 }
@@ -113,7 +113,7 @@ impl TokenKind {
             TokenKind::LogAnd => *crate::LOG_AND,
             TokenKind::BitNot => *crate::BIT_NOT,
             TokenKind::LogNot => *crate::LOG_NOT,
-            TokenKind::ModuleMember => *crate::MODULE_MEMBER,
+            TokenKind::PathSep => *crate::MODULE_MEMBER,
             TokenKind::Id { .. } => *crate::ID,
             TokenKind::Literal(..) => *crate::LITERAL,
         }

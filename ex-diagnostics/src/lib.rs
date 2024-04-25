@@ -21,6 +21,10 @@ impl DiagnosticsSender {
         }
     }
 
+    pub fn file(&self) -> &Arc<SourceFile> {
+        &self.file
+    }
+
     pub fn has_error(&self) -> bool {
         self.has_error.load(Ordering::Relaxed)
     }

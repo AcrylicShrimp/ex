@@ -150,5 +150,5 @@ fn convert(token: LowToken, low: Pos, file: &SourceFile) -> Option<Token> {
             TokenKind::Literal(literal)
         }
     };
-    Some(Token::new(kind, span))
+    Some(Token::new(span, kind))
 }

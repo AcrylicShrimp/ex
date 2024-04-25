@@ -13,7 +13,12 @@ impl Interner {
     pub const CHUNK_SIZE: usize = 4096;
 
     pub fn new() -> Self {
-        Self::default()
+        let mut interner = Self::default();
+
+        // intern empty symbol at 0
+        interner.intern("");
+
+        interner
     }
 
     pub fn str(&self, symbol: Symbol) -> &'static str {
